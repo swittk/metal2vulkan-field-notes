@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-29",
+  "scope": "Anonymized single Linux/NVIDIA host with x86 macOS guest",
+  "spotlight_excess_caret_groups": {
+    "baseline": 91,
+    "enabled": 0,
+    "warm_enabled": 0,
+    "same_binary_disabled_control": 66,
+    "final_bounded_enabled": 0
+  },
+  "additional_live_queries": {
+    "Activity Monitor": 0,
+    "Keyboard settings": 0,
+    "Safari valid rerun": 0
+  },
+  "native_guest_metal": {
+    "clear_self_read_3x40": {
+      "stale_pixels_disabled": 120,
+      "stale_pixels_enabled": 0
+    },
+    "clear_self_read_144x64": {
+      "stale_pixels_disabled": 9216,
+      "stale_pixels_enabled": 0
+    },
+    "unchanged_controls": [
+      "Load/self-read",
+      "Clear/independent source"
+    ],
+    "repetitions": 3
+  },
+  "cpu_runtime_suite": {
+    "passed": 1166,
+    "failed": 0,
+    "ignored": 1,
+    "bounded_eligibility_tests_included": 8
+  },
+  "release_build_stages_passed": 5,
+  "limitations": [
+    "Caret metric supplemented by visual inspection",
+    "Invalid first Safari run excluded",
+    "No physical Metal reference",
+    "Diagnostic env toggle is not upstream product design"
+  ]
+}

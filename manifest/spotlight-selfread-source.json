@@ -1,0 +1,20 @@
+{
+  "classification": "Experimental diagnostic correction; not ready-to-merge upstream fix",
+  "reference_baseline": "Locally integrated October 29, 2026 Metal2Vulkan snapshot; NOT public upstream master",
+  "patch": "patches/EXPERIMENTAL-spotlight-clear-selfread.patch",
+  "patch_sha256": "ea731887010dcabf5d4a63ad215d88fda137bb6b37fbb64cf04b2dd34492915b",
+  "source_sha256_before": {
+    "crates/metal2vulkan-runtime/src/render.rs": "24e83da12f89945e50e03346c4e07f9d6444626e86441bad4a6f1d162b12b28d",
+    "crates/metal2vulkan-runtime/src/render/selfread_clear.rs": null
+  },
+  "source_sha256_after": {
+    "crates/metal2vulkan-runtime/src/render.rs": "2dc8036f7fefe5b25a70fa2534242b21cb9b94ed89926307bb04fd8f17fe1f75",
+    "crates/metal2vulkan-runtime/src/render/selfread_clear.rs": "367b92f25455633c979a6048e19109ee026852581ec24b207be44463b86dba13"
+  },
+  "reverse_replay_verified": true,
+  "forward_replay_byte_identical_verified": true,
+  "applies_current_steelbrain_metal2vulkan_master": false,
+  "standalone_current_master_build_verified": false,
+  "physical_metal_reference_verified": false,
+  "diagnostic_env_gate": "REIMS_DIAG_SELFREAD_CLEAR=1 (do not upstream as default product switch)"
+}

@@ -7,3 +7,12 @@
 Suggested note (not yet posted): the independent field results show that changing four word writes to selective byte stores can pass semantic/IR checks yet regress a live 1080p macOS guest from about 30 to 6.47 presents/sec; see the negative-result diary. A potential private storage classification change is separately recorded with caveats and an upstream-file-level patch.
 
 **No public issue or PR has been created or commented on from this archive yet.**
+
+
+## Separate new issue: Spotlight ghost glyphs on Clear/attachment self-read
+
+No matching Spotlight self-read issue was found in the Metal2Vulkan or REIMS trackers in the November 2026 issue search. This is a **Metal2Vulkan render-pass semantics** issue, not video decoder work, and not the RADV shadow performance regression in #11.
+
+Suggested new issue title: **Clear-loaded attachment self-read can reintroduce stale glyph/caret pixels (Spotlight)**.
+
+The [issue draft](issue-drafts/metal2vulkan-clear-selfread-spotlight.md) links the [original diagnostic patch](patches/EXPERIMENTAL-spotlight-clear-selfread.patch), [measurements](results/spotlight-selfread.json), and [diary](diary/spotlight-clear-selfread.md). Upstream should adapt the structural logic to current render-pass code; the diagnostic env switch is *not* a product proposal.
