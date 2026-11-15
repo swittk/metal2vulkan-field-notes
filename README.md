@@ -17,6 +17,7 @@ The integrated REIMS memory and VideoToolbox findings are in [reims-vgpu-field-n
 
 - [Spotlight Clear/self-read experimental correction](patches/EXPERIMENTAL-spotlight-clear-selfread.patch): tested in an integrated Linux/Vulkan runtime, but **not applicable directly to current upstream master**, and opt-in diagnostic policy is not an upstream design.
 - [Spotlight investigation diary and same-binary A/B/A evidence](diary/spotlight-clear-selfread.md) and [normalized result](results/spotlight-selfread.json).
+- [Upstream Metal2Vulkan issue #17: Clear-loaded attachment self-read ghost pixels](https://github.com/steelbrain/metal2vulkan/issues/17) (filed November 15, 2026).
 - [Recorded patch source hashes](manifest/spotlight-selfread-source.json) and [upstream issue draft](issue-drafts/metal2vulkan-clear-selfread-spotlight.md).
 
 This is a render-pass Clear/attachment self-read correctness issue, **not** a Spotlight string parsing or REIMS VideoToolbox decoder issue.
