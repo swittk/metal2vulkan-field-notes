@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "scope": "five-second finite event trace, one anonymized host",
+  "render_attachments": 601,
+  "shadow_uses": 1203,
+  "shadow_copy_events": 1804,
+  "invalidation_events": 601,
+  "interpretation": "Different truth resources; not every copy is redundant",
+  "hypothesis": "Potential reuse of GPU-resident image for sampled reads only if writes and alias lifetime are proven consistent",
+  "status": "not a verified optimization"
+}

@@ -1,0 +1,7 @@
+{
+  "source": "An isolated single-host experimental selective-byte-store change",
+  "acceptance": "REJECTED following measured live performance regression",
+  "patch_sha256": "d4c11ce25336097f2ade791cdfc4f5dcfddd88dc52621cfc6cf162ad5b36127a",
+  "apply_to_current_upstream_master": "not verified; historical experimental baseline",
+  "publication_purpose": "negative result only, not a recommendation"
+}

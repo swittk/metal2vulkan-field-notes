@@ -1,0 +1,155 @@
+--- a/crates/metal2vulkan/src/bind/shadow_merge_image.rs
++++ b/crates/metal2vulkan/src/bind/shadow_merge_image.rs
+@@ -76,6 +76,7 @@
+ //! `SHADER_STORAGE_WRITE` there, before the dispatch; its writes → the bytes' next use.
+ 
+ use std::sync::Arc;
++use crate::spirv::ir::{natural_layout, LayoutRule};
+ 
+ use super::shadow_copy_back::{fetched_words, ShadowTexelView};
+ use super::shadow_merge::{merge_word, u32_value, words_buffer};
+@@ -87,7 +88,7 @@
+ use crate::spirv::builder::constructs::{ArmEnd, ArmFn};
+ use crate::spirv::builder::{FunctionBuilder, ModuleBuilder};
+ use crate::spirv::error::BResult;
+-use crate::spirv::ids::{TypeId, Value};
++use crate::spirv::ids::{GlobalId, TypeId, Value};
+ use crate::spirv::ir::{
+     BinOp, ConstBits, Constant, ConvOp, Dim, ExecMode, ExecModel, GlslOp, ImageOperands, ImageType,
+     ImageUsage, IoDir, MemAccess, StorageClass, Type, TypedModule,
+@@ -280,7 +281,12 @@
+ /// [`shadow_merge_kept_image_module`]) serializes, which the CPU interpreter runs. Its bindings
+ /// are the symbols `IMAGE`, `KEPT` (or `KEPT_IMAGE`) and `CURRENT`, and its push field the shape,
+ /// a `uvec4` (the module docs).
++#[cfg(test)]
+ fn typed_module(read: ShadowMergeRead, kept: Kept) -> BResult<TypedModule> {
++    typed_module_for(read, kept, false)
++}
++
++fn typed_module_for(read: ShadowMergeRead, kept: Kept, byte_writes: bool) -> BResult<TypedModule> {
+     let words = read.words();
+     let mut b = ModuleBuilder::new();
+     let u32_ = b.ty(Type::Int {
+@@ -319,7 +325,8 @@
+             KeptAt::Image(kept, view)
+         }
+     };
+-    let current = words_buffer(&mut b, CURRENT, u32_)?;
++    let u8_ = if byte_writes { b.ty(Type::Int { width: 8, signed: false })? } else { u32_ };
++    let current = if byte_writes { bytes_buffer(&mut b, CURRENT, u8_)? } else { words_buffer(&mut b, CURRENT, u32_)? };
+     let group = b.builtin(crate::spv::BuiltIn::WorkgroupId, IoDir::Input, uvec3)?;
+     let local = b.builtin(crate::spv::BuiltIn::LocalInvocationId, IoDir::Input, uvec3)?;
+     let void = b.ty(Type::Void)?;
+@@ -457,8 +464,10 @@
+             let write: ArmFn<'_, ()> = Box::new(move |f, _| {
+                 // The word at its row's place in the current buffer.
+                 let place = f.binary(BinOp::IAdd, row, w)?;
++                if byte_writes { merge_bytes(f, current, place, after, differ, u8_)?; } else {
+                 let to = f.access_chain(current, &[zero, place])?;
+                 merge_word(f, to, after, differ)?;
++                }
+                 Ok(ArmEnd::FallThrough(Vec::new()))
+             });
+             f.if_(&mut (), moved, write, None)?;
+@@ -550,7 +559,8 @@
+     kept: Kept,
+ ) -> Result<ShadowMergeImageModule, Error> {
+     let profile = device.profile();
+-    let m = typed_module(read, kept)?;
++    let byte_writes = profile.fields().leaf.int8 && profile.fields().leaf.storage_buffer_8bit;
++    let m = typed_module_for(read, kept, byte_writes)?;
+     let mut meter = Meter::new(&Budget::default());
+     crate::spirv::verify::verify(&m, profile, &mut meter)?;
+     let r = crate::spirv::serialize::serialize(m)?;
+@@ -570,7 +580,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::{
+-        texel_of, typed_module, Kept, ShadowMergeImageModule, ShadowMergeRead, ShadowTexelView,
++        texel_of, typed_module, typed_module_for, Kept, ShadowMergeImageModule, ShadowMergeRead, ShadowTexelView,
+         Texel, CURRENT, IMAGE, KEPT, KEPT_IMAGE,
+     };
+     use crate::spirv::interp::{run_with_images, Buffer, Config, Image, Order, Resources};
+@@ -593,6 +603,9 @@
+         for (_, p) in committed_profiles().expect("profiles") {
+             for (read, kept) in forms() {
+                 assert_valid(typed_module(read, kept).expect("module"), &p);
++                if p.fields().leaf.int8 && p.fields().leaf.storage_buffer_8bit {
++                    assert_valid(typed_module_for(read, kept, true).expect("byte module"), &p);
++                }
+             }
+         }
+     }
+@@ -680,7 +693,7 @@
+         (row_words, first_word): (u32, u32),
+         current: &[u32],
+     ) -> Vec<u32> {
+-        let m = typed_module(read, form).expect("module");
++
+         let [x0, y0, width, height] = region;
+         let extent = [shadow.extent[0], shadow.extent[1]];
+         let shape = ShadowMergeImageModule::shape([x0, y0], width, row_words, first_word);
+@@ -698,7 +711,8 @@
+             })
+         };
+         let mut out = Vec::new();
+-        for order in [Order::Forward, Order::Reverse] {
++        for (byte_writes, order) in [(false, Order::Forward), (false, Order::Reverse), (true, Order::Forward), (true, Order::Reverse)] {
++            let m = typed_module_for(read, form, byte_writes).expect("module");
+             let buffer = |slot, words: &[u32]| Buffer {
+                 slot: Some(slot),
+                 address: None,
+@@ -731,7 +745,7 @@
+             }
+             out.push(words_of(outcome.buffers.last().expect("current")));
+         }
+-        assert_eq!(out[0], out[1], "order independent");
++        for result in &out[1..] { assert_eq!(&out[0], result, "byte-store and word-merge paths are order independent and equivalent"); }
+         out.swap_remove(0)
+     }
+ 
+@@ -831,3 +845,44 @@
+         }
+     }
+ }
++
++fn bytes_buffer(
++    b: &mut ModuleBuilder,
++    sym: ResourceSlot,
++    u32_: TypeId,
++) -> BResult<GlobalId> {
++    let rta = b.ty(Type::RuntimeArray {
++        elem: u32_,
++        stride: Some(1),
++    })?;
++    let layout = natural_layout(b.types(), LayoutRule::Std430, true, &[rta])?;
++    let block = b.ty(Type::Struct {
++        members: [rta].into(),
++        layout: Some(layout),
++    })?;
++    b.resource(sym, StorageClass::StorageBuffer, block)
++}
++
++/// Write only bytes changed by the command; untouched guest bytes are never loaded or stored.
++fn merge_bytes(f: &mut FunctionBuilder<'_>, current: Value, word: Value, after: Value, differ: Value, u8_: TypeId) -> BResult<()> {
++    let zero = u32_value(f, 0)?;
++    let two = u32_value(f, 2)?;
++    let base = f.binary(BinOp::ShiftLeftLogical, word, two)?;
++    for byte in 0..4 {
++        let lane = u32_value(f, 0xff << (8 * byte))?;
++        let bits = f.binary(BinOp::BitwiseAnd, differ, lane)?;
++        let changed = f.binary(BinOp::INotEqual, bits, zero)?;
++        let store: ArmFn<'_, ()> = Box::new(move |f, _| {
++            let shift = u32_value(f, byte * 8)?;
++            let value = f.binary(BinOp::ShiftRightLogical, after, shift)?;
++            let value = f.convert(ConvOp::UConvert, value, u8_)?;
++            let offset = u32_value(f, byte)?;
++            let place = f.binary(BinOp::IAdd, base, offset)?;
++            let to = f.access_chain(current, &[zero, place])?;
++            f.store(to, value, MemAccess::default())?;
++            Ok(ArmEnd::FallThrough(Vec::new()))
++        });
++        f.if_(&mut (), changed, store, None)?;
++    }
++    Ok(())
++}

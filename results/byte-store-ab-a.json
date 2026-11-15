@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scope": "anonymized one-host 1080p sequential 30-second A/B/A; no multi-GPU performance guarantee",
+  "samples": [
+    {
+      "label": "baseline",
+      "gpu_busy_percent": 61.9667,
+      "presentations_per_second": 30.0667,
+      "power_watts": 108.462
+    },
+    {
+      "label": "rejected_candidate",
+      "gpu_busy_percent": 97.6,
+      "presentations_per_second": 6.4667,
+      "power_watts": 123.307
+    },
+    {
+      "label": "baseline_return",
+      "gpu_busy_percent": 62.2333,
+      "presentations_per_second": 30,
+      "power_watts": 103.566
+    }
+  ],
+  "queue_gpu_until_completion_median_ms": {
+    "baseline": 4.35,
+    "rejected_candidate": 40
+  },
+  "decision": "rejected",
+  "limitations": [
+    "single host",
+    "sequential runs",
+    "finite sampling",
+    "temperature and media state may differ",
+    "actual hardware explanation not established"
+  ]
+}

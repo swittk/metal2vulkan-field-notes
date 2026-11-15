@@ -1,0 +1,15 @@
+--- a/crates/metal2vulkan-runtime/src/shadow.rs
++++ b/crates/metal2vulkan-runtime/src/shadow.rs
+@@ -292,9 +292,11 @@
+             Ok(StorageMode::Private | StorageMode::Memoryless)
+         );
+         match (surface, buffer.caller_memory(), private) {
++            // Runtime-owned private storage has no external CPU writer, even when viewed
++            // as an internal IOSurface. Imported/caller memory keeps its original policy.
++            (_, None, true) => Backing::PrivateBuffer,
+             (true, _, _) => Backing::Surface,
+             (false, Some(_), _) => Backing::HostPages,
+-            (false, None, true) => Backing::PrivateBuffer,
+             (false, None, false) => Backing::MappedBuffer,
+         }
+     }

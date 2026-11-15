@@ -1,0 +1,10 @@
+{
+  "upstream": "steelbrain/metal2vulkan",
+  "upstream_ref": "219f01365dc4c8",
+  "file": "crates/metal2vulkan-runtime/src/shadow.rs",
+  "baseline_file_sha256": "ac15d6ae788f2d535058642dcff1a42269e3cbb4b3e2f486f10dbe4ea44ae123",
+  "modified_file_sha256": "b43fb92763228220ff92266abdbd94719a92a65190d1d1ccc397fd8b839dcb4d",
+  "applies_cleanly_to_pinned_upstream_file": true,
+  "locally_integrated_variant_tested": true,
+  "standalone_master_build_tested": false
+}
