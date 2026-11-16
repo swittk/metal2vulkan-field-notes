@@ -1,33 +1,21 @@
-# Metal2Vulkan: shadow and memory-transfer field notes
+# Metal2Vulkan field notes — shadowing, host memory and render-pass correctness
 
-Independent public analysis of runtime shadowing and GPU transfer approaches observed while integrating a macOS guest through REIMS. **Not an official release, and not a claim that upstream has reviewed or accepted the experiments.**
+Independent source and performance investigations from a macOS guest running on the Linux/Vulkan REIMS backend. This archive records both successful, narrow correctness changes and **negative results that failed actual GPU testing**.
 
-## Source and evidence
+**Start with the [research index](archive/README.md)** for the private backing change, Spotlight render-pass correction, rejected selective-byte-store implementation, direct external-memory rendering regression, and shadow-copy census.
 
-- [Small private-storage classification patch](patches/private-owned-iosurface-backing.patch): proposes classifying runtime-owned private Metal storage as PrivateBuffer *before* classifying an associated internal IOSurface as an externally mutable Surface. A patch of this shape was used in the integrated local build. The published patch is independently checked to **apply cleanly to the pinned upstream source file**; it has **not** been independently rebuilt/tested against current upstream master.
-- [Current upstream-file hash contract](manifest/private-backed-source.json) and [classification diary](diary/private-owned-storage.md).
-- [REJECTED selective byte-store candidate patch](patches/REJECTED-selective-byte-stores.patch): negative research example only, **do not deploy**.
-- [Byte-store A/B/A regression diary](diary/selective-byte-store-regression.md), [normalized results](results/byte-store-ab-a.json).
-- [Shadow copy census and limits](diary/shadow-copy-census.md), [normalized metrics](results/shadow-census.json).
-- [Upstream overlap notes](UPSTREAM.md).
+## Published source and tests
 
-The integrated REIMS memory and VideoToolbox findings are in [reims-vgpu-field-notes](https://github.com/swittk/reims-vgpu-field-notes).
+- [Private-owned IOSurface backing classification](patches/private-owned-iosurface-backing.patch): a small shape-based change checked against its pinned upstream source file. See [scope and risks](archive/private-backed-surfaces.md). The larger tested integration spans REIMS and Metal2Vulkan; no standalone upstream build of this patch is claimed.
+- [Spotlight Clear/self-read diagnostic patch](patches/EXPERIMENTAL-spotlight-clear-selfread.patch): replicated visual ghost text/caret rendering and native guest readback behavior, documented in the [same-binary diary](diary/spotlight-clear-selfread.md) and reported as [Metal2Vulkan #17](https://github.com/steelbrain/metal2vulkan/issues/17). The original patch does not cleanly apply to current master.
+- [Rejected selective-byte-store patch](patches/REJECTED-selective-byte-stores.patch): passed narrow logic/IR tests, yet severely regressed live GPU presentation. Read the [A/B/A diary](diary/selective-byte-store-regression.md) before considering similar alternatives.
+- [Direct externally backed host-image negative result](archive/direct-external-import-negative.md): an inspected single-host experiment ran at approximately 12.47 FPS and 89.73% GPU. No falsely reusable patch is offered because its old source baseline cannot be replayed from the later snapshots.
+- [Shadow-copy census](diary/shadow-copy-census.md) and [machine-readable aggregates](results/shadow-census.json): count repeated transfers without claiming all copies are redundant.
 
-## Additional confirmed visual bug: Spotlight scrambled text
+## Evidence boundaries
 
-- [Spotlight Clear/self-read experimental correction](patches/EXPERIMENTAL-spotlight-clear-selfread.patch): tested in an integrated Linux/Vulkan runtime, but **not applicable directly to current upstream master**, and opt-in diagnostic policy is not an upstream design.
-- [Spotlight investigation diary and same-binary A/B/A evidence](diary/spotlight-clear-selfread.md) and [normalized result](results/spotlight-selfread.json).
-- [Upstream Metal2Vulkan issue #17: Clear-loaded attachment self-read ghost pixels](https://github.com/steelbrain/metal2vulkan/issues/17) (filed November 15, 2026).
-- [Recorded patch source hashes](manifest/spotlight-selfread-source.json) and [upstream issue draft](issue-drafts/metal2vulkan-clear-selfread-spotlight.md).
+All hardware measurements were made on a single anonymized Linux/NVIDIA host. A separate [Metal2Vulkan #11](https://github.com/steelbrain/metal2vulkan/issues/11) reports an AMD/RADV shadowing regression; our results do not establish the same hardware mechanism. No device-ID tuning was deployed as a generic fast path.
 
-This is a render-pass Clear/attachment self-read correctness issue, **not** a Spotlight string parsing or REIMS VideoToolbox decoder issue.
+No host-identifying information, internal paths, raw logs, GPU UUIDs, Apple binaries, VM images, guest media, or private shader corpus is published. Source patches retain the upstream **GPL-2.0-or-later OR LGPL-3.0-or-later** license; original narrative and aggregate results are offered under CC BY 4.0.
 
-## Why publish a failed optimization?
-
-The selective byte-store candidate removed some destination loads and passed narrow semantic/SPIR-V checks, yet **actual live display performance collapsed**. That is important negative evidence against equating shorter shader source code, fewer loads, or one GPU capability flag with better real-world performance.
-
-All results were collected on one anonymized Linux x86-64 NVIDIA host. No GPU UUID/model/PCI ID, hostnames, driver IDs, private guest assets, firmware, source media, system images, raw traces, or credentials are published.
-
-## License and limitations
-
-Derivative source patches preserve Metal2Vulkan's original choice of **GPL-2.0-or-later OR LGPL-3.0-or-later**; original explanatory text and aggregate measurements are CC BY 4.0. See the provided license notices. Never infer portable Vulkan correctness or multi-GPU performance from our single-host trials.
+The companion [REIMS engineering archive](https://github.com/swittk/reims-vgpu-field-notes) covers the full decoder, guest-memory, GPU-private backing, and guest compatibility integration. This repository is neither an official Metal2Vulkan release nor a ready-to-merge PR branch.

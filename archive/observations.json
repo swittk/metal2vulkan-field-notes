@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scope": "Selected single-host Linux/NVIDIA Vulkan runtime controls; finite sequential observations",
+  "results": [
+    {
+      "case": "direct-external-linear-host-image",
+      "status": "REJECTED",
+      "presentations_per_second": 12.4667,
+      "average_gpu_busy_percent": 89.7333,
+      "approx_board_power_watts": 112.8727,
+      "decoder_busy_percent": 42.0333,
+      "native_return_fps_in_separate_run": 30.0,
+      "native_return_gpu_busy_percent_in_separate_run": 62.2,
+      "candidate_patch_published": false,
+      "reason": "Historical source baseline could not be faithfully reconstructed"
+    },
+    {
+      "case": "selective-byte-store",
+      "status": "REJECTED",
+      "baseline_fps": 30.0667,
+      "candidate_fps": 6.4667,
+      "return_fps": 30.0,
+      "candidate_gpu_busy_percent": 97.6,
+      "baseline_gpu_busy_percent": 61.9667,
+      "return_gpu_busy_percent": 62.2333,
+      "published_evidence": "results/byte-store-ab-a.json"
+    },
+    {
+      "case": "shadow-copy-census",
+      "status": "OBSERVATION_ONLY",
+      "seconds": 5,
+      "render_attachments": 601,
+      "shadow_uses": 1203,
+      "shadow_copy_events": 1804,
+      "invalidation_events": 601,
+      "all_copies_proven_redundant": false
+    }
+  ],
+  "limitations": [
+    "single host",
+    "different experimental conditions and instrumentation",
+    "not proof of cross-GPU viability or impossibility"
+  ]
+}
