@@ -12,6 +12,10 @@ Independent source and performance investigations from a macOS guest running on 
 - [Direct externally backed host-image negative result](archive/direct-external-import-negative.md): an inspected single-host experiment ran at approximately 12.47 FPS and 89.73% GPU. No falsely reusable patch is offered because its old source baseline cannot be replayed from the later snapshots.
 - [Shadow-copy census](diary/shadow-copy-census.md) and [machine-readable aggregates](results/shadow-census.json): count repeated transfers without claiming all copies are redundant.
 
+## New comparison against upstream master (November 2026)
+
+An [8-trial same-GPU standalone benchmark](benchmarks/2026-11-16-master-vs-accepted/README.md) compared the October accepted private-IOSurface implementation with current Metal2Vulkan master (commit d9236a8) using one identical correctness-checked 1080p test program. The older implementation had around 20–23% lower mean completion latency in that *host-side* workload. **Current master already contains a PrivateSurface classification**, and this is not a single-patch A/B or a guest screensaver comparison; details and reproducible source are included.
+
 ## Evidence boundaries
 
 All hardware measurements were made on a single anonymized Linux/NVIDIA host. A separate [Metal2Vulkan #11](https://github.com/steelbrain/metal2vulkan/issues/11) reports an AMD/RADV shadowing regression; our results do not establish the same hardware mechanism. No device-ID tuning was deployed as a generic fast path.
