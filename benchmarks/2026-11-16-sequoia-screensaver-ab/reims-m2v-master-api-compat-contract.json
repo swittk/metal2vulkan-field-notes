@@ -1,0 +1,118 @@
+{
+  "description": "Source-level compatibility adaptations used when compiling the accepted 2026-11-08 REIMS stack against Metal2Vulkan master d9236a8 (November 16 full-VM A/B). Old REIMS source is the frozen pinned input with accepted overlays; adapted source files were mounted over these at build time. This is NOT a patch for contemporary upstream REIMS master or development.",
+  "metal2vulkan_master_commit": "d9236a8a11d3b90a1aa27b54e2d74d3891c4d2e5",
+  "reims_accepted_source": "historical accepted 2026-11-08 integration with 42 recorded REIMS source overlays",
+  "final_adapter_files_postdate_initial_manifest": true,
+  "final_adapter_source_mtimes_precede_compiled_final_binary": true,
+  "files": [
+    {
+      "path": "crates/reims-vgpu-vulkan/src/swapchain.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "799bb1e0505407f6418f56ba259637d468d6b342f4a92dfb1f1e1e2d93758635",
+      "adapted_sha256": "d817864f0cb83d47a281fed1c32cd6cdb13c38398bde5ddab751050e17eaaccc",
+      "old_bytes": 67467,
+      "adapted_bytes": 67476,
+      "patch_changed": true,
+      "diff_hunk_count": 3
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/platform.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "6e7990f6486d29fe8e5e0c58f9c4e69352bc5b99ba259a8aef5049fa2eecf605",
+      "adapted_sha256": "d597b31896e3d258c5dfb8bb1c9bd5dfac3ffc96cf150271af5440765577ff0b",
+      "old_bytes": 54683,
+      "adapted_bytes": 49988,
+      "patch_changed": true,
+      "diff_hunk_count": 4
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/answer.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "6d1248762b36ba3b2236eb2da3a99a9a0df637f08b9a7e439ce3c3a29475f4c4",
+      "adapted_sha256": "de67af81b2e9a2b4373f48ff549cd5e783c30a36d2ca3d9e71a4e0d49c4d9b90",
+      "old_bytes": 203725,
+      "adapted_bytes": 203222,
+      "patch_changed": true,
+      "diff_hunk_count": 7
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/answer/native.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "cb7839d3e1caf263a6241ebcc05c0fc14a0ceb39a851e1c8646811b2145ece7d",
+      "adapted_sha256": "42e6ccca4dc171d043d82daa416080ba526630a66b8b9a4369aea727543c3b1e",
+      "old_bytes": 34591,
+      "adapted_bytes": 34586,
+      "patch_changed": true,
+      "diff_hunk_count": 1
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/os/linux.rs",
+      "base_source": "accepted_overlaid_source",
+      "base_sha256": "61e6c4aedca6eacda5b2cb0e2c6f03f8608e1389bd63b67572db9a2afa227c20",
+      "adapted_sha256": "23405ca2ccad4b0144fb493b178efd8ee4f63093cbde8bc2da15112ebfc84451",
+      "old_bytes": 5794,
+      "adapted_bytes": 5833,
+      "patch_changed": true,
+      "diff_hunk_count": 2
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/os/linux/dma_buf.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "1a6d4260606bc169ad58e4c25ad5f022474b0ecb6326784b0e263ebdd1700621",
+      "adapted_sha256": "4f32ad7bc2f5a96e855453167dedf470aca41a65c4d1ecfce8eb3970f8227a9e",
+      "old_bytes": 32107,
+      "adapted_bytes": 32146,
+      "patch_changed": true,
+      "diff_hunk_count": 1
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/gpu/resource.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "dd7e0bbf2fa77b3a13dac997464d8d3b98664734e104b60663034220acb40c79",
+      "adapted_sha256": "1c3b25a88ab27caceff2c683439730836bc193b59a2bfbb73b3cc1b5a1264de4",
+      "old_bytes": 197155,
+      "adapted_bytes": 197168,
+      "patch_changed": true,
+      "diff_hunk_count": 1
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/gpu/format_info.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "ab42c5b0d6442afb022539c76b48943472b5f01b5cf056bb3ec28f30bc2a7e96",
+      "adapted_sha256": "db7bd55c8d3dcd0c48503454141ef03ee39a2a93647b8a48a3e94666000cc997",
+      "old_bytes": 24716,
+      "adapted_bytes": 13523,
+      "patch_changed": true,
+      "diff_hunk_count": 9
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/gpu/device.rs",
+      "base_source": "accepted_overlaid_source",
+      "base_sha256": "2ce0915613bab8a6a20ac5a22e6b4e50b93f30a2f9594fd44f510c4f783e8f45",
+      "adapted_sha256": "6552ff3631cf36a23cc19a19ded8a7cdacef7f60eec5969c3d471451301d565f",
+      "old_bytes": 143322,
+      "adapted_bytes": 143334,
+      "patch_changed": true,
+      "diff_hunk_count": 1
+    },
+    {
+      "path": "crates/reims-vgpu-vulkan/src/gpu/caps.rs",
+      "base_source": "pinned_older_reims_source",
+      "base_sha256": "e65820620e22850ad2cfb49dd9278e41564ccd2f1a98c48f93a474fc3647943f",
+      "adapted_sha256": "c6d198b27127e46a576e5693a6907b66db473fc00c9eda5feb05072b66a9e809",
+      "old_bytes": 43540,
+      "adapted_bytes": 43541,
+      "patch_changed": true,
+      "diff_hunk_count": 1
+    }
+  ],
+  "patch_sha256": "285e21a1579f4b90e29e3f4fe088498ca914ce550b57bbc68650c0e63981d37c",
+  "replayed_in_clean_sparse_source_tree": true,
+  "replay_file_post_sha_all_match": true,
+  "additional_correctness_patches": [
+    "pool-reservation-compat.patch",
+    "private-buffer-device-identity.patch"
+  ],
+  "integrated_qemu_binary_sha256": "1eeed39c2f87b155d76144f1cf7d633d0b9f2571fdee066b8b8c3e891a95540a",
+  "important_limitation": "Current master side requires two separately published identity corrections and other pinned accepted source overlays. These public artifacts document modifications and raw performance outcomes but are not a one-command VM reproduction."
+}

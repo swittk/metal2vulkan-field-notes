@@ -61,6 +61,24 @@ The initial startup failure and black framebuffer were **correctness failures, n
 
 Every final performance run used a freshly built QEMU image with diagnostics removed, validated by a binary marker scan. Source hashes, image hashes and exact capture code versions are retained in the experiment provenance.
 
+## Independent source provenance and loop-pacing investigation
+
+The A/B's **current-master variant did not use stock current REIMS**. It used the older, previously accepted REIMS integration, rebuilt against unmodified Metal2Vulkan master d9236a8. For an inspectable record of what changed **outside M2V**, see:
+
+- [Ten-file REIMS API adapter delta](reims-m2v-master-api-compat.patch) and [input/output SHA-256 contract](reims-m2v-master-api-compat-contract.json). This patch was generated from the **actual frozen older REIMS source and accepted overlays** to the final build's compiled adapter files, then applied to a fresh sparse preimage tree; all resulting file SHA-256 hashes matched. It is **not** a recommended patch to current upstream REIMS. The original initial experimental adapter manifest predates three later build corrections, so the contract uses the final built source revisions.
+- [Address-pool root/generation-device identity fix](pool-reservation-compat.patch). The older REIMS consumer used an AddressPool.device().properties() pointer to identify a reservation even though the current M2V runtime can return a generation-specific handle. This assumption is already corrected in contemporary upstream REIMS, independently of our experimental adapter.
+- [Private IOSurface backing-cache identity fix](private-buffer-device-identity.patch). This is a bug in our **local 2026-10-31 REIMS private-backing optimization**, not a demonstrated bug in current upstream REIMS or M2V. It must reuse the source root device's buffer rather than compare the returned generation handle's properties.
+
+The older REIMS video-loop pacing repair is **already published separately**, with its actual code and evidence:
+
+- [REIMS issue #157](https://github.com/steelbrain/reims-vgpu/issues/157), including the maintainer's response that the relevant fix was pushed to the development branch. This concerns the **older AppleParavirtGPU / apple-gfx transport**, not a demonstration of a bug in today's reims-graphics-pci driver.
+- [Complete historical 17-file loop fix](https://github.com/swittk/reims-vgpu-field-notes/blob/479e3a5a80210a7e684036634c99866825ce4974/patches/complete-loop-fix.patch), [narrow scattered-memory import decision](https://github.com/swittk/reims-vgpu-field-notes/blob/479e3a5a80210a7e684036634c99866825ce4974/patches/native-import-only.patch), [base-source hashes](https://github.com/swittk/reims-vgpu-field-notes/blob/479e3a5a80210a7e684036634c99866825ce4974/manifest/complete-patch-bases.json), and [investigation and rejected candidates](https://github.com/swittk/reims-vgpu-field-notes/blob/479e3a5a80210a7e684036634c99866825ce4974/diary/02-approaches-and-failures.md).
+- [Accepted loop-pacing results](https://github.com/swittk/reims-vgpu-field-notes/blob/479e3a5a80210a7e684036634c99866825ce4974/diary/03-accepted-implementation.md): approximately 260 s at 30 FPS on the original screensaver, worst QEMU gap 59.6 ms and no gaps >60 ms; a **separate** 150 s native-player control at nearly 60 FPS improved from 110.855 ms worst gap and six >60 ms gaps to 55.357 ms worst gap and zero such gaps.
+
+**Do not merge the two studies into one latency result.** The A/B reported here uses three **60-second** moving-screensaver windows per arm, insufficient to characterize rare events near the original 120-second video loop. It captures per-run worst inter-presentation gaps (accepted: 47.6/43.8/55.9 ms; integrated M2V master: 57.9/65.7/87.8 ms), not input-to-display or decode latency percentiles. Both variants also had excluded startup/transition failures. The separate historical 150/260-second pacing experiments demonstrate the older loop fix but are not a matched current-REIMS or current-M2V long-duration latency comparison.
+
+The original 42 accepted REIMS and 11 Metal2Vulkan source overlays, guest/firmware materials and environment are not all redistributed here, so the public materials establish **inspectable source differences and measurements**, not a byte-for-byte, one-command reconstruction of the private VM.
+
 ## Rejected tests are not hidden
 
 - **master-b1:** one otherwise moving-frame run averaged **27.932 guest presentations/s**, with a transient stall. It failed the 30 FPS requirement. The harness rejected the attempt; **no GPU mean from it is reported or imputed**.

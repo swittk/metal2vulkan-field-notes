@@ -1,0 +1,920 @@
+diff --git a/crates/reims-vgpu-vulkan/src/swapchain.rs b/crates/reims-vgpu-vulkan/src/swapchain.rs
+--- a/crates/reims-vgpu-vulkan/src/swapchain.rs
++++ b/crates/reims-vgpu-vulkan/src/swapchain.rs
+@@ -638,7 +638,7 @@
+             reason
+         };
+         // SAFETY: the closure only reads the family; it submits nothing.
+-        let family = unsafe { present.with_vk_queue(|_, family| family) };
++        let family = unsafe { present.with_vk_queue(|_, _, family| family) };
+         // SAFETY: `surface` and `physical` are live, of one instance.
+         let presents =
+             unsafe { surface_api.get_physical_device_surface_support(physical, family, surface) }
+@@ -948,7 +948,7 @@
+         // ([`crate::os::present_fences`]), and is unsignalled with nothing pending on it.
+         let presented = unsafe {
+             self.present
+-                .with_vk_queue(|q, _| api.queue_present(q, &info))
++                .with_vk_queue(|_, q, _| api.queue_present(q, &info))
+         };
+         drop(wsi);
+         image.last = Some(command_buffer);
+@@ -1065,7 +1065,7 @@
+         // SAFETY: the wait submits nothing; the queue is the swapchain's presenting queue.
+         let idle = unsafe {
+             self.present
+-                .with_vk_queue(|q, _| self.vk.queue_wait_idle(q))
++                .with_vk_queue(|_, q, _| self.vk.queue_wait_idle(q))
+         };
+         if let Err(e) = idle {
+             log::warn!(target: "reims_vgpu_vulkan::swapchain", "vkQueueWaitIdle: {e}");
+diff --git a/crates/reims-vgpu-vulkan/src/platform.rs b/crates/reims-vgpu-vulkan/src/platform.rs
+--- a/crates/reims-vgpu-vulkan/src/platform.rs
++++ b/crates/reims-vgpu-vulkan/src/platform.rs
+@@ -195,11 +195,8 @@
+             made => made,
+         })
+     });
+-    if heard.contains(&rt::Degradation::MetalLevelBelowHost) {
+-        // Relaxed: stored before the level is kept ([`answered_at`], a `OnceLock`, whose read
+-        // acquires it), and read after it.
+-        BELOW_HOST.store(true, Ordering::Relaxed);
+-    }
++    let _ = heard; // current runtime exposes one fixed macOS Metal answer set
++
+     made
+ }
+ 
+@@ -238,75 +235,24 @@
+ 
+ /// Whether the runtime announced that its devices answer as a release below the host's
+ /// (`MetalLevelBelowHost`, [`made_devices`]): the host's release is not one it measured.
+-static BELOW_HOST: AtomicBool = AtomicBool::new(false);
+-
+-/// The Metal level of an answer `sel` gives that depends on it ([`metal_level`]): `what`, which
+-/// the releases the runtime measured answer otherwise. On a host whose own release the runtime
+-/// has not measured ([`BELOW_HOST`]) the devices answer as the newest measured release below it,
+-/// and the host's Metal may answer otherwise, so `sel` relays it there, naming `what` and the
+-/// level, and dies in strict mode ([`crate::answer::Inexact::MetalLevel`]). The level either way.
+-pub(crate) fn answering_level(sel: &'static str, what: impl FnOnce() -> String) -> rt::MetalLevel {
+-    let level = metal_level(sel);
+-    if BELOW_HOST.load(Ordering::Relaxed) {
+-        crate::answer::inexact(sel, crate::answer::Inexact::MetalLevel, || {
+-            format!(
+-                "{}, which Metal's releases answer differently: this host's macOS release is not \
+-                 one the Vulkan runtime measured, and its devices answer as {level}, the newest \
+-                 measured release below it",
+-                what()
+-            )
+-        });
+-    }
+-    level
+-}
+-
+-/// The Metal level every device of this process answers at (`rt::DeviceProperties::metal_level`):
+-/// the macOS release whose Metal the runtime answers as where releases differ, among them which
+-/// pixel format values a texture descriptor takes ([`rt::MetalLevel::knows`]) and which formats
+-/// Metal describes ([`rt::MetalLevel::describes`]). [`device_options`] names the OS's
+-/// ([`crate::os::METAL_LEVEL`]): on macOS none, so it is the host's release, or the newest
+-/// measured release below it; on Linux macOS 27.0.1, the contract machine's. The same for every
+-/// device. The first device the platform adopts sets it ([`answered_at`]); read before any is,
+-/// it is the runtime's system default device's, made for it, which dies as [`made_devices`]
+-/// does where the runtime makes none, at `sel`, the call that asks.
+-pub(crate) fn metal_level(sel: &'static str) -> rt::MetalLevel {
+-    if let Some(&level) = METAL_LEVEL.get() {
+-        return level;
+-    }
+-    let made = made_devices(sel, || {
+-        rt::Device::system_default_with(device_options()).map(|d| vec![d])
++// Compatibility with the one release answered by current Metal2Vulkan.
++#[derive(Clone, Copy, PartialEq, Eq, Debug)]
++pub(crate) enum MetalLevel { MacOS26_7, MacOS27_0_1 }
++impl std::fmt::Display for MetalLevel {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "{}", match self { Self::MacOS26_7 => "macOS 26.7", Self::MacOS27_0_1 => "macOS 27.0.1" })
++    }
++}
++pub(crate) fn answering_level(_sel: &'static str, _what: impl FnOnce() -> String) -> MetalLevel {
++    MetalLevel::MacOS27_0_1
++}
++pub(crate) fn metal_level(_sel: &'static str) -> MetalLevel { MetalLevel::MacOS27_0_1 }
++pub(crate) fn answered_at(_sel: &'static str, _level: MetalLevel) { }
++pub(crate) fn answering_device(_sel: &'static str) -> &'static rt::Device {
++    static DEVICE: std::sync::LazyLock<rt::Device> = std::sync::LazyLock::new(|| {
++        rt::Device::system_default_with(device_options()).expect("GPU required")
+     });
+-    let Some(device) = made.first() else {
+-        refused(sel, &rt::Error::NoDevice)
+-    };
+-    let level = device.properties().metal_level;
+-    answered_at(sel, level);
+-    level
+-}
+-
+-/// The level of [`metal_level`], once known.
+-static METAL_LEVEL: std::sync::OnceLock<rt::MetalLevel> = std::sync::OnceLock::new();
+-
+-/// Keeps `level`, a device's, as the process's Metal level ([`metal_level`]), and logs it the
+-/// first time. A device of another level than the process's answers as its own, relayed at
+-/// `sel`, the call that made it, and dies there in strict mode
+-/// ([`crate::answer::Inexact::MetalLevel`]; unreachable: every device here is made with
+-/// [`device_options`]).
+-pub(crate) fn answered_at(sel: &'static str, level: rt::MetalLevel) {
+-    let kept = *METAL_LEVEL.get_or_init(|| {
+-        log::info!(
+-            target: "reims_vgpu_vulkan::platform",
+-            "the Vulkan runtime's devices answer Metal's pixel formats as {level}"
+-        );
+-        level
+-    });
+-    if kept != level {
+-        crate::answer::inexact(sel, crate::answer::Inexact::MetalLevel, || {
+-            format!(
+-                "a device answering Metal as {level}, where this process's devices answer as {kept}"
+-            )
+-        });
+-    }
++    &DEVICE
+ }
+ 
+ /// The options every device is made with: the runtime's defaults, whose loader search finds
+@@ -356,7 +302,6 @@
+     static OPTIONS: LazyLock<rt::DeviceOptions> = LazyLock::new(|| {
+         let mut options = rt::DeviceOptions::default();
+         crate::os::add_window_extensions(&mut options);
+-        options.metal_level = crate::os::METAL_LEVEL;
+         options.gpu_times_from_host = true;
+         options.policy = exact_policy(std::env::var("REIMS_VGPU_EXACT").ok().as_deref());
+         let sink = rt::MessageSink::new(crate::answer::notice);
+@@ -467,46 +412,12 @@
+ /// format only under `ycbcr_filter`. A name of neither changes nothing, and a line on stderr says
+ /// so.
+ fn exact_policy(exact: Option<&str>) -> metal2vulkan::device::DevicePolicy {
+-    use metal2vulkan::device::{
+-        BatchOrderPolicy, CompletionPolicy, DecodedTexelsPolicy, DevicePolicy, FloatMathsPolicy,
+-        HalfBlendPolicy, HalfRoundingPolicy, HalfTexelBitsPolicy, HeapCompressionPolicy,
+-        MultisampleDepthTwinPolicy, NanMinMaxPolicy, ResolvePolicy, RoundingOrderPolicy,
+-        SamplingPolicy, TexelConversionPolicy, TileStorePolicy, VertexNormalizedPolicy,
+-        YCbCrFilterPolicy,
+-    };
+-    let mut policy = DevicePolicy::default();
+-    policy.completion = CompletionPolicy::Exact;
+-    policy.heap_compression = HeapCompressionPolicy::Uncompressed;
+-    for name in (exact.unwrap_or_default().split(',').map(str::trim)).filter(|n| !n.is_empty()) {
+-        match name {
+-            EXACT_ALL => policy = policy.exact_answers(),
+-            "sampling" => policy.sampling = SamplingPolicy::Exact,
+-            "ycbcr_filter" => policy.ycbcr_filter = YCbCrFilterPolicy::Exact,
+-            "float_maths" => policy.float_maths = FloatMathsPolicy::Exact,
+-            "texel_conversion" => policy.texel_conversion = TexelConversionPolicy::Exact,
+-            "vertex_normalized" => policy.vertex_normalized = VertexNormalizedPolicy::Exact,
+-            "half_rounding" => policy.half_rounding = HalfRoundingPolicy::Exact,
+-            "nan_and_min_max" => policy.nan_and_min_max = NanMinMaxPolicy::Exact,
+-            "rounding_order" => policy.rounding_order = RoundingOrderPolicy::Exact,
+-            "half_blend" => policy.half_blend = HalfBlendPolicy::Exact,
+-            "half_texel_bits" => policy.half_texel_bits = HalfTexelBitsPolicy::Exact,
+-            "multisample_depth_twin" => {
+-                policy.multisample_depth_twin = MultisampleDepthTwinPolicy::Exact;
+-            }
+-            "decoded_texels" => policy.decoded_texels = DecodedTexelsPolicy::Exact,
+-            "tile_store" => policy.tile_store = TileStorePolicy::Exact,
+-            "resolve" => policy.resolve = ResolvePolicy::Exact,
+-            "batch_order" => policy.batch_order = BatchOrderPolicy::Exact,
+-            other => {
+-                let line = format!(
+-                    "reims-vgpu: REIMS_VGPU_EXACT names {other:?}, none of {EXACT_ALL}, {}: \
+-                     ignored\n",
+-                    EXACT_FORMS.join(", ")
+-                );
+-                let _ = std::io::Write::write_all(&mut std::io::stderr(), line.as_bytes());
+-            }
+-        }
+-    }
++    use metal2vulkan::device::{CompletionPolicy, DevicePolicy, HeapCompressionPolicy};
++    let mut policy=DevicePolicy::default();
++    policy.completion=CompletionPolicy::Exact;
++    policy.heap_compression=HeapCompressionPolicy::Uncompressed;
++    assert!(exact.unwrap_or_default().trim().is_empty(),
++            "REIMS_VGPU_EXACT requested old policy names removed in current Metal2Vulkan; refuse to silently change them");
+     policy
+ }
+ 
+diff --git a/crates/reims-vgpu-vulkan/src/answer.rs b/crates/reims-vgpu-vulkan/src/answer.rs
+--- a/crates/reims-vgpu-vulkan/src/answer.rs
++++ b/crates/reims-vgpu-vulkan/src/answer.rs
+@@ -1182,7 +1182,7 @@
+ /// is placed; a kind whose answer the runtime states is Metal's (`rt::Exactness::Exact`: a
+ /// performance or validity kind) or one of Metal's where Metal's own is not one value
+ /// (`rt::Exactness::OneOfMetals`) is placed by that statement.
+-pub const DIES: [rt::Degradation; 136] = [
++pub const DIES: [rt::Degradation; 125] = [
+     rt::Degradation::ReleasedCommandState,
+     rt::Degradation::TwoPlaneTextureCopy,
+     rt::Degradation::TwoPlaneBufferBlit,
+@@ -1195,20 +1195,14 @@
+     rt::Degradation::BiasedDepthPastUnitRange,
+     rt::Degradation::UnormDepthBias,
+     rt::Degradation::UnormDepthRounding,
+-    rt::Degradation::UnormDepthSlope,
+     rt::Degradation::RestrictedDepthUpload,
+     rt::Degradation::RestrictedDepthRange,
+     rt::Degradation::UnmeasuredResolve,
+     rt::Degradation::MoltenVkArgumentBuffersUnread,
+-    rt::Degradation::BeyondMeasuredDeviation,
+     rt::Degradation::FunctionStorageAssumed,
+     rt::Degradation::HalfSampleFilter,
+     rt::Degradation::SrgbTexelDecode,
+     rt::Degradation::FloatSampleFilter,
+-    rt::Degradation::DeviceGatherFootprint,
+-    rt::Degradation::CubeFaceReciprocal,
+-    rt::Degradation::DeviceDepthComparison,
+-    rt::Degradation::DeviceTexelDenormals,
+     rt::Degradation::AnisotropicFilter,
+     rt::Degradation::DeviceAnisotropicFilter,
+     rt::Degradation::ViewBaseTexelOffset,
+@@ -1228,7 +1222,6 @@
+     rt::Degradation::InPlaceVertexReads,
+     rt::Degradation::FragmentsBeforeGeometry,
+     rt::Degradation::AttachmentReadInPlace,
+-    rt::Degradation::MipmapsWithinSpread,
+     rt::Degradation::HeapDepthStencilApart,
+     rt::Degradation::HeapTextureHidesAliasedWrites,
+     rt::Degradation::HeapTextureCompressed,
+@@ -1280,7 +1273,6 @@
+     rt::Degradation::DevicePointSize,
+     rt::Degradation::ClippedCoverageSplit,
+     rt::Degradation::TessellationTriangleOrder,
+-    rt::Degradation::MetalLevelNotMacOS,
+     rt::Degradation::DeviceNanEncoding,
+     rt::Degradation::DeviceArithmetic,
+     rt::Degradation::DeviceDenormals,
+@@ -1293,8 +1285,6 @@
+     rt::Degradation::HelperBranchDropsSimdgroupStores,
+     rt::Degradation::ExtendedRangeBlendsStoredCodes,
+     rt::Degradation::ExtendedRangeBlendSource,
+-    rt::Degradation::MipmapsAsAppleM4,
+-    rt::Degradation::MipmapTieRounding,
+     rt::Degradation::PrivateResourceOption,
+     rt::Degradation::StaleDetachedReach,
+     rt::Degradation::RotatedLoadTiles,
+@@ -1316,7 +1306,6 @@
+     rt::Degradation::ProvokingVertexUnmatched,
+     rt::Degradation::PredicationWordPastBuffer,
+     rt::Degradation::HeapTwoPlaneLayout,
+-    rt::Degradation::ReadOnlyPagesWritten,
+     rt::Degradation::CoverageReadsRoundedAlpha,
+     rt::Degradation::UnmeasuredFetchBlend,
+ ];
+@@ -1459,9 +1448,8 @@
+ ///   16-bit float format's `half` unblended or blended by `Min` or `Max`, and a 32-bit float
+ ///   format's value, as measured. An execution's commands announce it at the commit, which hears
+ ///   nothing and relays it. Relayed the first time alone ([`RELAYED_ONCE`]).
+-pub const HEARD: [rt::Degradation; 8] = [
++pub const HEARD: [rt::Degradation; 7] = [
+     rt::Degradation::HeapTwoPlaneTexture,
+-    rt::Degradation::MetalLevelBelowHost,
+     rt::Degradation::OptimizedDepthStencilTexture,
+     rt::Degradation::RasterizationRateMap,
+     rt::Degradation::HeapTextureUntiledLayout,
+diff --git a/crates/reims-vgpu-vulkan/src/answer/native.rs b/crates/reims-vgpu-vulkan/src/answer/native.rs
+--- a/crates/reims-vgpu-vulkan/src/answer/native.rs
++++ b/crates/reims-vgpu-vulkan/src/answer/native.rs
+@@ -132,7 +132,7 @@
+                  runtime's note). Census: 1220, 175 and 102 occurrences on macOS 13, 15 and 26",
+     },
+     NativeRelay {
+-        kind: rt::Degradation::DeviceTexelDenormals,
++        kind: rt::Degradation::DeviceDenormals,
+         ground: "a denormal 32-bit float texel, which Metal's sample and gather hand back as \
+                  it is, the device's gather may read as zero (the runtime's note). Census: 7 \
+                  occurrences on macOS 26, none on 13 and 15",
+diff --git a/crates/reims-vgpu-vulkan/src/os/linux.rs b/crates/reims-vgpu-vulkan/src/os/linux.rs
+--- a/crates/reims-vgpu-vulkan/src/os/linux.rs
++++ b/crates/reims-vgpu-vulkan/src/os/linux.rs
+@@ -121,7 +121,7 @@
+ }
+ 
+ /// The macOS release whose Metal the runtime's devices answer as where releases differ
+-/// (`DeviceOptions::metal_level`, the rows of [`rt::MetalLevel`]): macOS 27.0.1 (26A434), the
++/// (`DeviceOptions::metal_level`, the rows of [`crate::platform::MetalLevel`]): macOS 27.0.1 (26A434), the
+ /// release the M3 Max runs, on which the suite's host-dependent expected files were recorded
+ /// (`AppleM3Max-40c-26A434`) and this crate's comparisons with Metal run, where the Vulkan
+ /// platform answers as the host's release. So a Linux host answers the guest as that Mac does.
+@@ -130,7 +130,7 @@
+ /// Metal's behaviour alone: what the paravirtual device reports to the guest's driver (the guest
+ /// ABI's binary versions and features, the device's feature level) is the host's to configure,
+ /// and does not follow it.
+-pub const METAL_LEVEL: Option<rt::MetalLevel> = Some(rt::MetalLevel::MacOS27_0_1);
++pub const METAL_LEVEL: Option<crate::platform::MetalLevel> = Some(crate::platform::MetalLevel::MacOS27_0_1);
+ 
+ /// The registry ID the platform answers for the runtime's default device in place of its own:
+ /// none, as there is no Metal here to ask, so the runtime's own stands.
+diff --git a/crates/reims-vgpu-vulkan/src/os/linux/dma_buf.rs b/crates/reims-vgpu-vulkan/src/os/linux/dma_buf.rs
+--- a/crates/reims-vgpu-vulkan/src/os/linux/dma_buf.rs
++++ b/crates/reims-vgpu-vulkan/src/os/linux/dma_buf.rs
+@@ -389,7 +389,8 @@
+     let made = cut.iter().map(|chunk| {
+         let fd = create(device, chunk)?;
+         Ok(DmaBufChunk {
+-            fd,
++            file: Arc::new(fd),
++            offset: 0,
+             length: chunk.iter().map(|r| r.length).sum(),
+         })
+     });
+diff --git a/crates/reims-vgpu-vulkan/src/gpu/resource.rs b/crates/reims-vgpu-vulkan/src/gpu/resource.rs
+--- a/crates/reims-vgpu-vulkan/src/gpu/resource.rs
++++ b/crates/reims-vgpu-vulkan/src/gpu/resource.rs
+@@ -1261,7 +1261,7 @@
+     }
+     let described = crate::gpu::format_info::describes_answer(sel, pixel_format);
+     let level = crate::platform::metal_level(sel);
+-    if crate::gpu::format_info::level_decides(pixel_format) && level != rt::MetalLevel::MacOS26_7 {
++    if crate::gpu::format_info::level_decides(pixel_format) && level != crate::platform::MetalLevel::MacOS26_7 {
+         crate::answer::inexact(sel, crate::answer::Inexact::MetalLevel, || {
+             format!(
+                 "a view in pixel format {pixel_format}, which Metal at {level} describes \
+diff --git a/crates/reims-vgpu-vulkan/src/gpu/format_info.rs b/crates/reims-vgpu-vulkan/src/gpu/format_info.rs
+--- a/crates/reims-vgpu-vulkan/src/gpu/format_info.rs
++++ b/crates/reims-vgpu-vulkan/src/gpu/format_info.rs
+@@ -1,25 +1,18 @@
+ //! `MTLPixelFormatGetInfoForDevice()` and `MTLGetTextureLevelInfoForDeviceWithOptions()`, the
+-//! runtime's answers.
+-//!
+-//! **A pixel format's description** ([`description`]), which core gives the guest (its flags, of
+-//! which it reads the compressed, PVRTC and two-plane bits, and its four block words,
+-//! `reims_vgpu_core::resources::texture::pixel_format`), is the runtime's
+-//! (`Device::pixel_format_info`): Apple's private description at the device's Metal level, from
+-//! the runtime's own measurements of plain Metal at every value from 0 to 2047 on an Apple M3 Max
+-//! under macOS 26.7 and under 27.0.1 (26A434), each of which describes the same 264 formats (an
+-//! Apple M4 under 27.0.1 describes 630 to 645 too, which neither level does). A value the level
+-//! describes no format for is described as
+-//! Metal describes it: `MTLPixelFormatInvalid`, every word 0. No level describes
+-//! `Depth24Unorm_Stencil8` (255) or `X24_Stencil8` (262), as no Apple GPU has them. A format's
+-//! description does not hang on whether the runtime makes textures of it: a descriptor takes one
+-//! it lacks, and a texture of it dies where it is made ([`crate::gpu::desc::lacked`]) or is nil
+-//! ([`crate::gpu::no_texture`]). At macOS 26.7 the descriptions are the Metal platform's on this
+-//! host at every value (`descriptions_are_the_metal_platforms_here`), and so are they at 27.0.1 on
+-//! this host under 27.0.1. The two levels describe a value otherwise, in what core reads, only in
+-//! the flags of five formats
+-//! (`RGB10A2Unorm_sRGB`, `_PQ` and `_HLG`, 586, 587 and 623, and `BGR10A2Unorm_sRGB` and `_PQ`, 628
+-//! and 629); macOS 27.0.1 also numbers 175 of the 264 formats' cast classes anew, which core does
+-//! not read (`descriptions_differ_by_level_only_where_the_runtime_measured_it`).
++//! runtime's answers, at the one macOS release whose Metal every device answers as
++//! (`rt::MACOS_RELEASE`, 27.0.1).
++//!
++//! **A pixel format's description** ([`description`]) is the runtime's
++//! (`Device::pixel_format_info`): Apple's private description, from the runtime's own
++//! measurements of plain Metal at every value from 0 to 2047 on an Apple M3 Max under macOS
++//! 27.0.1 (26A434), which describes 264 formats (an Apple M4 describes 630 to 645 too, which the
++//! runtime does not). A value Metal describes no format for is described as Metal describes it:
++//! `MTLPixelFormatInvalid`, every word 0. Metal describes neither `Depth24Unorm_Stencil8` (255)
++//! nor `X24_Stencil8` (262), as no Apple GPU has them. A format's description does not hang on
++//! whether the runtime makes textures of it: a descriptor takes one it lacks, and a texture of it
++//! dies where it is made ([`crate::gpu::desc::lacked`]) or is nil ([`crate::gpu::no_texture`]).
++//! The descriptions are Metal's on the M3 Max at every value
++//! (`descriptions_are_metals`).
+ //!
+ //! **A texture level's layout** ([`level_layout`]), which core checks a texture on an IOSurface
+ //! against (its rows' bytes, its rows, its bytes a pixel), is the runtime's
+@@ -27,7 +20,7 @@
+ //! with no miss, to 34,306 of Metal's answers on the M3 Max and 34,626 on the M4, over
+ //! every described format at 20 sizes, levels (the sixth argument) from 0 to 2^32, depths, array
+ //! lengths, plane arguments (the seventh), values no format is, and zero sizes, which Metal
+-//! answers as sizes of 1. `levels_are_the_metal_platforms_here` compares it with the Metal
++//! answers as sizes of 1. `levels_are_metals` compares it with the Metal
+ //! platform on this host, where it wraps at 2^64 as Metal does: it counts an extent's blocks as
+ //! `(extent + block - 1) / block` with an add that wraps, so a width of `u64::MAX` has no blocks
+ //! 4 wide (`wrapped_block_counts_are_metals`), and its products of blocks, bytes, depths and
+@@ -36,122 +29,51 @@
+ //! height, at depth 1 and array length 1.
+ //!
+ //! **What this platform's own rules read of a description** ([`block`]: a texture's bytes by
+-//! Apple's layout, a CPU write's unit) is macOS 26.7's, where those rules were measured; the
+-//! levels describe it alike.
+-//!
+-//! **Which values Metal's setter takes and which formats Metal describes** differ by macOS
+-//! release, so both are the runtime's row of the release the devices answer as
+-//! ([`crate::platform::metal_level`]: [`setter_takes`], [`described`]), which at macOS 26.7 is
+-//! the measured host's (`the_measured_host_is_the_runtimes_level_of_macos_26_7`). On a host whose
+-//! release the runtime has not measured, whose devices answer as the newest measured release below
+-//! it, an answer the measured releases give otherwise dies where it is asked
+-//! ([`crate::platform::answering_level`]): the setter's at the values only one release takes,
+-//! whether Metal describes a format where a view's nil or a state's attachment hangs on it
+-//! ([`describes_answer`], [`crate::gpu::held_format`]), whether a creator makes a texture of it
+-//! ([`crate::gpu::desc::TextureFields::descriptor`]), a description whose flags or words differ
+-//! ([`description`]; the cast class, which core does not read, is the level's) and a level's
+-//! layout that differs ([`level_layout`]). The setter holds such a format as the level describes
+-//! it, which the guest does not see ([`crate::gpu::set_format`]).
+-
+-use metal2vulkan::metal::PixelFormat;
+-use metal2vulkan_runtime::{self as rt, MetalLevel};
++//! Apple's layout) is the description's compressed bit and block words.
++//!
++//! **Which values Metal's setter takes** ([`setter_takes`]): every value of a format the runtime
++//! has, `MTLPixelFormatInvalid` among them, and **which formats Metal describes** ([`described`]):
++//! those its description names.
++//!
++//! The answers need a device, any of the process's, as every device answers alike
++//! ([`crate::platform::answering_device`]).
++
+ use reims_vgpu_core::platform::types::{PixelFormatInfo, TextureLevelInfo, TextureLevelQuery};
+-
+-/// Whether Metal describes `raw` as a format: a format the runtime has that the devices' Metal
+-/// level describes ([`MetalLevel::describes`], [`crate::platform::metal_level`]), which no level
+-/// does of `Depth24Unorm_Stencil8` (255) and `X24_Stencil8` (262), as no Apple GPU has them. At
+-/// macOS 26.7 these are the 264 formats the Metal platform describes on this
+-/// host (`the_measured_host_is_the_runtimes_level_of_macos_26_7`).
++use metal2vulkan_runtime as rt;
++
++/// Metal's description of `raw`, asked by `sel` of the process's device
++/// ([`crate::platform::answering_device`]).
++fn info(sel: &'static str, raw: u64) -> rt::PixelFormatInfo {
++    crate::platform::answering_device(sel).pixel_format_info(raw)
++}
++
++/// Whether Metal describes `raw` as a format: a format the runtime has that Metal's description
++/// names, which `Depth24Unorm_Stencil8` (255) and `X24_Stencil8` (262) are not, as no Apple GPU
++/// has them. These are the 264 formats Metal describes on the M3 Max
++/// (`the_runtime_has_every_format_metal_describes`).
+ pub(crate) fn described(sel: &'static str, raw: u64) -> bool {
+-    described_at(|| crate::platform::metal_level(sel), raw)
+-}
+-
+-/// [`described`], where the answer `sel` gives depends on it, as it does where a view is nil or a
+-/// state's attachment hangs on it: at a level below the host's release, where the levels the
+-/// runtime measured differ for `raw`, `sel` dies ([`crate::platform::answering_level`]).
+-/// [`described`] itself picks how a value is held, which the guest does not see, and never dies.
+-pub(crate) fn describes_answer(sel: &'static str, raw: u64) -> bool {
+-    let what = || format!("whether Metal describes pixel format {raw}");
+-    described_at(|| crate::platform::answering_level(sel, what), raw)
+-}
+-
+-/// Whether the Metal levels the runtime measured describe `raw` otherwise, one a format and
+-/// another none ([`MetalLevel::describes`]), where [`described`] asks the level: no value at the
+-/// runtime's levels, which describe the same formats.
+-pub(crate) fn level_decides(raw: u64) -> bool {
+-    crate::gpu::runtime_pixel_format(raw).is_some_and(|pf| {
+-        let mut answers = MetalLevel::ALL.into_iter().map(|l| l.describes(pf));
+-        let first = answers.next();
+-        answers.any(|a| Some(a) != first)
+-    })
+-}
+-
+-/// [`described`] at the level `level` answers, which is asked only where the levels the runtime
+-/// measured differ for `raw`.
+-fn described_at(level: impl FnOnce() -> MetalLevel, raw: u64) -> bool {
+-    at_level(level, raw, MetalLevel::describes)
+-}
+-
+-/// Whether Metal's `setPixelFormat:` takes `raw`: a value the devices' Metal level knows
+-/// ([`MetalLevel::knows`], [`crate::platform::metal_level`]), `MTLPixelFormatInvalid` among them,
+-/// of a format the runtime has. Measured on the M3 Max (macOS 26.7), one value a process, at
+-/// every value from 0 to 2047, without `MTL_DEBUG_LAYER`: the setter takes the formats Metal
+-/// describes, `MTLPixelFormatInvalid`, 255, 262 and 630 to 650, and asserts at every other value
+-/// ("pixelFormat (2000) is not a valid MTLPixelFormat"), the 13 three-channel formats among them;
+-/// every texture creator asserts at a descriptor of one of those it takes but describes none for
+-/// ("MTLTextureDescriptor has invalid pixelFormat (630)"), but
+-/// `newSharedTextureWithDescriptor:`, which answers nil for one at a storage other than
+-/// `Private`, and at `Private` for 0 and 630 to 650
+-/// (`formats_the_runtime_lacks_die_where_textures_are_made`). That is the runtime's row of macOS
+-/// 26.7 (`the_measured_host_is_the_runtimes_level_of_macos_26_7`); macOS 27.0.1's setter takes
+-/// the three-channel formats too, which it describes none of.
+-pub(crate) fn setter_takes(sel: &'static str, raw: u64) -> bool {
+-    let what = || format!("whether Metal's setPixelFormat: takes {raw}");
+-    at_level(
+-        || crate::platform::answering_level(sel, what),
+-        raw,
+-        |level, pf| level.knows(pf),
+-    )
+-}
+-
+-/// `answer` for the runtime's format of `raw` at the level `level` gives, false for a value the
+-/// runtime has no format of. Where every level the runtime measured answers alike, that answer,
+-/// without asking `level`: the levels differ only at the three-channel formats, which macOS
+-/// 27.0.1's setter takes and 26.7's does not.
+-fn at_level(
+-    level: impl FnOnce() -> MetalLevel,
+-    raw: u64,
+-    answer: impl Fn(MetalLevel, PixelFormat) -> bool,
+-) -> bool {
+-    let Some(pf) = crate::gpu::runtime_pixel_format(raw) else {
+-        return false;
+-    };
+-    let mut answers = MetalLevel::ALL.into_iter().map(|l| answer(l, pf));
+-    let first = answers.next().unwrap_or(false);
+-    if answers.all(|a| a == first) {
+-        first
+-    } else {
+-        answer(level(), pf)
+-    }
++    crate::gpu::runtime_pixel_format(raw).is_some() && info(sel, raw).describes_a_format()
++}
++
++/// Whether Metal's `setPixelFormat:` takes `raw`: a value of a format the runtime has,
++/// `MTLPixelFormatInvalid` among them. Metal's setter takes the formats Metal describes,
++/// `MTLPixelFormatInvalid`, 255, 262, 630 to 650 and the 13 three-channel formats, and asserts at
++/// every other value ("pixelFormat (2000) is not a valid MTLPixelFormat"); every texture creator
++/// asserts at a descriptor of one of those it takes but describes none for ("MTLTextureDescriptor
++/// has invalid pixelFormat (630)"), but `newSharedTextureWithDescriptor:`, which answers nil for
++/// one at a storage other than `Private`, and at `Private` for 0 and 630 to 650
++/// (`formats_the_runtime_lacks_die_where_textures_are_made`).
++pub(crate) fn setter_takes(_sel: &'static str, raw: u64) -> bool {
++    crate::gpu::runtime_pixel_format(raw).is_some()
+ }
+ 
+ /// `flags` bit 10: a format of compressed blocks (core's `KIND_COMPRESSED`), whose block words
+ /// are its block's width and height.
+ pub(crate) const COMPRESSED: u64 = 0x400;
+ 
+-/// `MTLPixelFormatGetInfoForDevice()` (`sel`) of `raw` on `device`: Metal's description at the
+-/// device's Metal level, the runtime's (`Device::pixel_format_info`), field for field. Where the
+-/// levels the runtime measured describe `raw` otherwise in its name, flags or words, the level is
+-/// asked, which on a host whose release the runtime has not measured dies at `sel`
+-/// ([`crate::platform::answering_level`]): five formats whose flags differ (the module's docs).
+-/// The cast class, which 27.0.1 numbers anew
+-/// for most formats, is the device's level's there too, as core does not read it.
+-pub(crate) fn description(sel: &'static str, device: &rt::Device, raw: u64) -> PixelFormatInfo {
+-    if !alike(raw, |info| (info.name, info.flags, info.words)) {
+-        crate::platform::answering_level(sel, || {
+-            format!("Metal's description of pixel format {raw}")
+-        });
+-    }
++/// `MTLPixelFormatGetInfoForDevice()` of `raw` on `device`: Metal's description, the runtime's
++/// (`Device::pixel_format_info`), field for field.
++pub(crate) fn description(_sel: &'static str, device: &rt::Device, raw: u64) -> PixelFormatInfo {
+     let info = device.pixel_format_info(raw);
+     let [block_bytes, block_width, block_height, block_depth] = info.words;
+     PixelFormatInfo {
+@@ -165,18 +87,11 @@
+     }
+ }
+ 
+-/// `MTLGetTextureLevelInfoForDeviceWithOptions()` (`sel`) of `q` on `device`: Metal's layout of
+-/// the level at the device's Metal level, the runtime's (`Device::texture_level_info`), word for
+-/// word. Core's sixth and seventh arguments (`options` and `flags`) are the
+-/// runtime's level and plane argument, as its probes found Metal reads them. Where the levels the
+-/// runtime measured lay the query out otherwise (a format one describes and another does not,
+-/// which no value is at the runtime's levels), the level is asked, which on a host whose release
+-/// the runtime has not measured dies at `sel` ([`crate::platform::answering_level`]).
+-pub(crate) fn level_layout(
+-    sel: &'static str,
+-    device: &rt::Device,
+-    q: &TextureLevelQuery,
+-) -> TextureLevelInfo {
++/// `MTLGetTextureLevelInfoForDeviceWithOptions()` of `q` on `device`: Metal's layout of the
++/// level, the runtime's (`Device::texture_level_info`), word for word. Core's sixth and seventh
++/// arguments (`options` and `flags`) are the runtime's level and plane argument, as its probes
++/// found Metal reads them.
++pub(crate) fn level_layout(_sel: &'static str, device: &rt::Device, q: &TextureLevelQuery) -> TextureLevelInfo {
+     let query = rt::TextureLevelQuery {
+         pixel_format: q.pixel_format,
+         width: q.width,
+@@ -186,16 +101,6 @@
+         level: q.options,
+         planes: q.flags,
+     };
+-    let at = |level: MetalLevel| level.texture_level_info(&query);
+-    let oldest = at(MetalLevel::MacOS26_7);
+-    if !MetalLevel::ALL.into_iter().all(|level| at(level) == oldest) {
+-        crate::platform::answering_level(sel, || {
+-            format!(
+-                "Metal's layout of a level of pixel format {}",
+-                q.pixel_format
+-            )
+-        });
+-    }
+     let [
+         field_0,
+         field_8,
+@@ -228,31 +133,24 @@
+     }
+ }
+ 
+-/// Metal's name for `raw`, its description's at the devices' Metal level
+-/// (`MTLPixelFormatInvalid` for a value it describes no format for), for diagnostics: the levels
+-/// the runtime measured name a value alike but where one describes it and another does not (no
+-/// value at the runtime's levels), where `sel` asks the level ([`crate::platform::metal_level`]).
+-/// It never dies.
++/// Metal's name for `raw`, its description's (`MTLPixelFormatInvalid` for a value it describes
++/// no format for), for diagnostics, asked by `sel`.
+ pub(crate) fn name(sel: &'static str, raw: u64) -> &'static str {
+-    read_at(|| crate::platform::metal_level(sel), raw, |info| info.name)
++    info(sel, raw).name
+ }
+ 
+ /// What this platform's own rules read of Metal's description of a format ([`block`]).
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub(crate) struct Block {
+-    /// Whether the format is one of blocks: flags bit 10 ([`COMPRESSED`]).
++    /// Whether the format is one of blocks: flags bit 10 ([`COMPRESSED`]), the compressed formats
++    /// and the 4:2:2 `GBGR422` and `BGRG422`.
+     compressed: bool,
+     /// The description's four words.
+     words: [u64; 4],
+ }
+ 
+ impl Block {
+-    /// Whether the format is one of blocks: flags bit 10 ([`COMPRESSED`]), the compressed formats
+-    /// and the 4:2:2 `GBGR422` and `BGRG422`.
+-    pub(crate) fn compressed(self) -> bool {
+-        self.compressed
+-    }
+-
++    pub(crate) fn compressed(self) -> bool { self.compressed }
+     /// A block's bytes (the first word): a texel's for a format not of blocks, 0 for a value Metal
+     /// describes no format for.
+     pub(crate) fn bytes(self) -> u64 {
+@@ -272,128 +170,60 @@
+ }
+ 
+ /// What this platform's own rules read of Metal's description of `raw` (a texture's bytes by
+-/// Apple's layout, [`crate::gpu::metal_space`]; a CPU write's unit, [`crate::gpu::resource`]):
+-/// macOS 26.7's, where the rules were measured. The levels the runtime measured describe it
+-/// alike but where one describes `raw` and another does not (no value at the runtime's levels):
+-/// there `sel` asks the level ([`crate::platform::answering_level`]) and, at any but macOS 26.7,
+-/// which describes none, reads that level's description, relayed naming `what` (`Apple's layout
+-/// of a texture of`, ...), as nothing measured the rule at a release that describes the format,
+-/// and dies in strict mode ([`crate::answer::Inexact::MetalLevel`]).
+-pub(crate) fn block(sel: &'static str, raw: u64, what: &str) -> Block {
+-    let level = || crate::platform::answering_level(sel, || format!("{what} pixel format {raw}"));
+-    block_at(level, sel, raw, what)
+-}
+-
+-/// [`block`] at the level `level` answers, which is asked only where the levels differ.
+-fn block_at(level: impl FnOnce() -> MetalLevel, sel: &'static str, raw: u64, what: &str) -> Block {
+-    let rules = MetalLevel::MacOS26_7;
+-    let level = || {
+-        let level = level();
+-        if level != rules {
+-            crate::answer::inexact(sel, crate::answer::Inexact::MetalLevel, || {
+-                format!(
+-                    "{what} pixel format {raw}, which Metal at {level} describes {}: this \
+-                     platform's rule for it was measured at {rules}, which describes {}",
+-                    describes(level, raw),
+-                    describes(rules, raw),
+-                )
+-            });
+-        }
+-        level
+-    };
+-    read_at(level, raw, |info| Block {
++/// Apple's layout, [`crate::gpu::metal_space`]; a CPU write's unit, [`crate::gpu::resource`]),
++/// asked by `sel`.
++pub(crate) fn block(sel: &'static str, raw: u64, _what: &str) -> Block {
++    let info = info(sel, raw);
++    Block {
+         compressed: info.flags & COMPRESSED != 0,
+         words: info.words,
+-    })
+-}
+-
+-/// "a format for" or "no format for", as `level` describes `raw`.
+-fn describes(level: MetalLevel, raw: u64) -> &'static str {
+-    match level.pixel_format_info(raw).describes_a_format() {
+-        true => "a format for",
+-        false => "no format for",
+-    }
+-}
+-
+-/// `read` of Metal's description of `raw` at macOS 26.7, where every level the runtime measured
+-/// reads it alike ([`alike`]), and else at the level `level` answers, which is asked only then.
+-fn read_at<T: PartialEq>(
+-    level: impl FnOnce() -> MetalLevel,
+-    raw: u64,
+-    read: impl Fn(rt::PixelFormatInfo) -> T,
+-) -> T {
+-    match alike(raw, &read) {
+-        true => read(MetalLevel::MacOS26_7.pixel_format_info(raw)),
+-        false => read(level().pixel_format_info(raw)),
+-    }
+-}
+-
+-/// Whether every Metal level the runtime measured gives `raw` a description of which `read` reads
+-/// the same.
+-fn alike<T: PartialEq>(raw: u64, read: impl Fn(rt::PixelFormatInfo) -> T) -> bool {
+-    let at = |level: MetalLevel| read(level.pixel_format_info(raw));
+-    let oldest = at(MetalLevel::MacOS26_7);
+-    MetalLevel::ALL.into_iter().all(|level| at(level) == oldest)
++    }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
++    #[cfg(target_os = "macos")]
++    use metal2vulkan::metal::PixelFormat;
++
+     use super::*;
+ 
+     /// The selector a description is asked by here.
+     const INFO: &str = "MTLPixelFormatGetInfoForDevice()";
+ 
+-    /// Every value a level the runtime measured describes, from 0 to 2047: 264 at macOS 26.7.
+-    fn described_by(level: MetalLevel) -> Vec<u64> {
++    /// Every value Metal describes, from 0 to 2047.
++    fn described_values() -> Vec<u64> {
++        let d = crate::gpu::device::tests::dev();
+         (0..2048)
+-            .filter(|&raw| level.pixel_format_info(raw).describes_a_format())
++            .filter(|&raw| d.raw.pixel_format_info(raw).describes_a_format())
+             .collect()
+     }
+ 
+-    /// The runtime has a format of every value Metal describes, at every level it measured, so a
+-    /// value this platform keeps raw ([`crate::gpu::held_format`]) is one Metal describes no
+-    /// format for: the death of a texture, view or state of one is Metal's assertion
+-    /// ([`crate::gpu::desc::lacked_as`])
++    /// The runtime has a format of every value Metal describes, the 264 formats Metal describes on
++    /// the measured host, so a value this platform keeps raw ([`crate::gpu::held_format`]) is one
++    /// Metal describes no format for: the death of a texture, view or state of one is Metal's
++    /// assertion ([`crate::gpu::desc::lacked_as`]). Metal's setter takes what Metal describes,
++    /// `MTLPixelFormatInvalid`, 255, 262, 630 to 650 and the 13 three-channel formats, measured,
++    /// and Metal describes neither of the two formats no Apple GPU has, `Depth24Unorm_Stencil8`
++    /// (255) and `X24_Stencil8` (262)
+     #[test]
+     fn the_runtime_has_every_format_metal_describes() {
+-        assert_eq!(described_by(MetalLevel::MacOS26_7).len(), 264);
+-        for level in MetalLevel::ALL {
+-            for raw in described_by(level) {
+-                assert!(crate::gpu::runtime_pixel_format(raw).is_some(), "{raw}");
+-                assert!(described_at(|| level, raw), "{level} {raw}");
+-            }
+-        }
+-    }
+-
+-    /// The runtime's row of macOS 26.7, at every value from 0 to 2047, is the measured host's
+-    /// Metal's: its setter takes what that level knows (the formats it describes,
+-    /// `MTLPixelFormatInvalid`, 255, 262 and 630 to 650, measured), and the level describes what
+-    /// its description describes (the Metal platform's on this host,
+-    /// `descriptions_are_the_metal_platforms_here`), which leaves out the two formats no Apple
+-    /// GPU has, `Depth24Unorm_Stencil8` (255) and `X24_Stencil8` (262); the levels differ only at
+-    /// the three-channel formats, where alone the devices' level is asked, and describe every
+-    /// value alike (`level_decides`)
+-    #[test]
+-    fn the_measured_host_is_the_runtimes_level_of_macos_26_7() {
+-        let described = described_by(MetalLevel::MacOS26_7);
+-        let measured = |raw| described.contains(&raw);
+-        let level = || MetalLevel::MacOS26_7;
+-        let unasked = || -> MetalLevel { panic!("the level is asked") };
++        let values = described_values();
++        assert_eq!(values.len(), 264);
+         for raw in 0..2048 {
+-            let taken = measured(raw) || matches!(raw, 0 | 255 | 262 | 630..=650);
+-            let knows = |level: MetalLevel, pf| level.knows(pf);
+-            assert_eq!(at_level(level, raw, knows), taken, "{raw}");
+-            assert_eq!(described_at(level, raw), measured(raw), "{raw}");
+-            assert!(!level_decides(raw), "{raw}");
+-            if !matches!(raw, 45..=48 | 95..=100 | 120..=122) {
+-                at_level(unasked, raw, knows);
+-                described_at(unasked, raw);
+-            }
++            let measured = values.contains(&raw);
++            assert_eq!(described(INFO, raw), measured, "{raw}");
++            let taken = measured
++                || matches!(
++                    raw,
++                    0 | 255 | 262 | 630..=650 | 45..=48 | 95..=100 | 120..=122
++                );
++            assert_eq!(setter_takes(raw), taken, "{raw}");
+         }
+     }
+ 
+     /// The extents a level's layout is compared at: zeros, which Metal answers as 1, sizes that
+     /// round to blocks and that do not, and sizes whose block counts or bytes wrap.
++    #[cfg(target_os = "macos")]
+     const EXTENTS: [u64; 12] = [
+         0,
+         1,
+@@ -409,12 +239,11 @@
+         u64::MAX,
+     ];
+ 
+-    /// Metal's layouts where a level's block count wraps, as the M3 Max (macOS 26.7) answered
+-    /// them: Metal counts an extent's blocks as `(extent + block - 1) / block` with an add that
++    /// Metal's layouts where a level's block count wraps, as the M3 Max answered them: Metal counts an extent's blocks as `(extent + block - 1) / block` with an add that
+     /// wraps at 2^64, so a width or height past 2^64 - block has no blocks (`u64::MAX` has none 4
+     /// wide), and the extent they cover and the bytes of a row, an image and the level follow from
+-    /// the count. The runtime answers each so at macOS 26.7 (`levels_are_the_metal_platforms_here`
+-    /// compares every format so on the device). Core never asks one: its extents are the guest's
++    /// the count. The runtime answers each so (`levels_are_metals` compares every
++    /// format so on the device). Core never asks one: its extents are the guest's
+     /// 32-bit width and height
+     #[test]
+     fn wrapped_block_counts_are_metals() {
+@@ -447,73 +276,43 @@
+             ),
+             (240, MAX, 5, [MAX, 5, 1, 0, 5, 1, 0, 5, 1, 4, 0, 0, 0]),
+         ];
++        let d = crate::gpu::device::tests::dev();
+         for (format, width, height, metal) in measured {
+             let q = rt::TextureLevelQuery::plane_2d(format, width, height);
+-            let runtime = MetalLevel::MacOS26_7.texture_level_info(&q);
++            let runtime = d.raw.texture_level_info(&q);
+             assert_eq!(runtime.words(), metal, "{format}, {width} by {height}");
+         }
+     }
+ 
+-    /// Where the levels the runtime measured describe a value otherwise, as the module's docs say:
+-    /// in the flags (where a description dies on a host whose release the runtime has not
+-    /// measured) of 586, 587, 623, 628 and 629 alone, none of them a compressed bit; in the cast
+-    /// class at 175 of the 264 formats both describe; nowhere in a level's layout, in what this
+-    /// platform's rules read ([`block`]) or in the name ([`level_decides`])
++    /// What this platform's rules read of a description: of `BGRA8Unorm` a texel of 4 bytes, of
++    /// `ASTC_12x10_LDR` blocks of 16 bytes 12 by 10, and at 630 to 645, which Metal does not
++    /// describe (an Apple M4 does), no format, named `MTLPixelFormatInvalid`
+     #[test]
+-    fn descriptions_differ_by_level_only_where_the_runtime_measured_it() {
+-        let values: Vec<u64> = (0..2048)
+-            .chain([9999, u64::from(u32::MAX) + 70, u64::MAX])
+-            .collect();
+-        let differ = |read: &dyn Fn(rt::PixelFormatInfo) -> (u64, u64, [u64; 4])| -> Vec<u64> {
+-            values
+-                .iter()
+-                .copied()
+-                .filter(|&raw| !alike(raw, read))
+-                .collect()
+-        };
+-        let guest = differ(&|i| (i.flags, 0, i.words));
+-        assert_eq!(guest, [586, 587, 623, 628, 629]);
+-        assert!(differ(&|i| (i.flags & COMPRESSED, 0, i.words)).is_empty());
+-        assert_eq!(differ(&|i| (0, i.cast_class, [0; 4])).len(), 175);
+-        for &raw in &values {
+-            assert_eq!(!alike(raw, |i| i.name), level_decides(raw), "{raw}");
+-            let layouts = EXTENTS.map(|w| {
+-                let q = rt::TextureLevelQuery::plane_2d(raw, w, 9);
+-                MetalLevel::ALL.map(|l| l.texture_level_info(&q))
+-            });
+-            let alike = layouts.iter().all(|[a, b]| a == b);
+-            assert_eq!(!alike, level_decides(raw), "{raw}");
+-        }
+-    }
+-
+-    /// What this platform's rules read of a description is macOS 26.7's, asked of no level where
+-    /// every level reads it alike, as at 630 to 645, which no level describes (an Apple M4 under
+-    /// 27.0.1 does): of no format, named `MTLPixelFormatInvalid`
+-    #[test]
+-    fn rules_read_macos_26_7s_description() {
+-        let unasked = || -> MetalLevel { panic!("the level is asked") };
+-        let bgra = block_at(unasked, INFO, 80, "a fill of");
++    fn rules_read_metals_description() {
++        let bgra = block(INFO, 80);
+         assert_eq!(
+-            (bgra.compressed(), bgra.bytes(), bgra.extent()),
++            (bgra.compressed, bgra.bytes(), bgra.extent()),
+             (false, 4, [1, 1])
+         );
+-        let astc = block_at(unasked, INFO, 217, "a fill of");
++        let astc = block(INFO, 217);
+         assert_eq!(
+-            (astc.compressed(), astc.bytes(), astc.extent()),
++            (astc.compressed, astc.bytes(), astc.extent()),
+             (true, 16, [12, 10])
+         );
+         for raw in 630..=645 {
+-            let none = block_at(unasked, INFO, raw, "a fill of");
++            let none = block(INFO, raw);
+             assert_eq!((none.bytes(), none.extent()), (0, [1, 1]), "{raw}");
+-            assert_eq!(
+-                read_at(unasked, raw, |i| i.name),
+-                "MTLPixelFormatInvalid",
+-                "{raw}"
+-            );
++            assert_eq!(name(INFO, raw), "MTLPixelFormatInvalid", "{raw}");
+         }
+-        assert_eq!(read_at(unasked, 80, |i| i.name), "MTLPixelFormatBGRA8Unorm");
++        assert_eq!(name(INFO, 80), "MTLPixelFormatBGRA8Unorm");
+     }
+ 
+     #[cfg(target_os = "macos")]
+     pub(crate) mod metal_tests;
+ }
++
++
++pub(crate) fn describes_answer(sel: &'static str, raw: u64) -> bool {
++    described(sel,raw)
++}
++pub(crate) fn level_decides(_raw: u64) -> bool { false }
+diff --git a/crates/reims-vgpu-vulkan/src/gpu/device.rs b/crates/reims-vgpu-vulkan/src/gpu/device.rs
+--- a/crates/reims-vgpu-vulkan/src/gpu/device.rs
++++ b/crates/reims-vgpu-vulkan/src/gpu/device.rs
+@@ -238,7 +238,7 @@
+ /// follows ([`metal_space::count_sampler_ids`]). A new device's class joins the process's
+ /// placement of degradations ([`crate::answer::native::device_made`]).
+ pub fn adopt(sel: &'static str, raw: rt::Device) -> VulkanDevice {
+-    crate::platform::answered_at(sel, raw.properties().metal_level);
++    crate::platform::answered_at(sel, crate::platform::MetalLevel::MacOS27_0_1);
+     let id = registry_id(&raw);
+     let mut devices = DEVICES.lock();
+     if let Some((_, kept)) = devices.iter().find(|(at, _)| *at == id) {
+diff --git a/crates/reims-vgpu-vulkan/src/gpu/caps.rs b/crates/reims-vgpu-vulkan/src/gpu/caps.rs
+--- a/crates/reims-vgpu-vulkan/src/gpu/caps.rs
++++ b/crates/reims-vgpu-vulkan/src/gpu/caps.rs
+@@ -464,7 +464,7 @@
+         min_linear_alignment_bgra8: send(
+             "minimumLinearTextureAlignmentForPixelFormat:",
+             Policy::Caught,
+-            || props.minimum_linear_texture_alignment_for_pixel_format(PixelFormat::BGRA8Unorm),
++            || device.minimum_linear_texture_alignment_for_pixel_format(PixelFormat::BGRA8Unorm),
+         ),
+     })
+ }
