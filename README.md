@@ -4,6 +4,10 @@ Independent source and performance investigations from a macOS guest running on 
 
 **Start with the [research index](archive/README.md)** for the private backing change, Spotlight render-pass correction, rejected selective-byte-store implementation, direct external-memory rendering regression, and shadow-copy census.
 
+## Verified full-guest screensaver comparison (16 November 2026)
+
+The [actual 1080p animated macOS forest screensaver A/B](benchmarks/2026-11-16-sequoia-screensaver-ab/README.md) compared the working accepted REIMS integration with Metal2Vulkan master at pinned commit d9236a8, on the same NVIDIA RTX 2080 Ti. **Three valid 60-second runs per arm**, each with verified moving frames and approximately 30 guest presentations/s, measured **20.028% vs 20.433% GPU busy** respectively (a small 0.406-percentage-point difference). Full GPU/power/CPU/presentation observations, two REIMS root-device identity compatibility corrections, and the two explicitly rejected attempts are published with an offline validator. This real-guest study supersedes the **relevance** of the earlier standalone microbenchmark to screensaver performance; that synthetic test remains a separate, bounded result.
+
 ## Published source and tests
 
 - [Private-owned IOSurface backing classification](patches/private-owned-iosurface-backing.patch): a small shape-based change checked against its pinned upstream source file. See [scope and risks](archive/private-backed-surfaces.md). The larger tested integration spans REIMS and Metal2Vulkan; no standalone upstream build of this patch is claimed.
@@ -14,7 +18,7 @@ Independent source and performance investigations from a macOS guest running on 
 
 ## New comparison against upstream master (November 2026)
 
-An [8-trial same-GPU standalone benchmark](benchmarks/2026-11-16-master-vs-accepted/README.md) compared the October accepted private-IOSurface implementation with current Metal2Vulkan master (commit d9236a8) using one identical correctness-checked 1080p test program. The older implementation had around 20–23% lower mean completion latency in that *host-side* workload. **Current master already contains a PrivateSurface classification**, and this is not a single-patch A/B or a guest screensaver comparison; details and reproducible source are included.
+An **earlier, host-side-only** [8-trial same-GPU standalone benchmark](benchmarks/2026-11-16-master-vs-accepted/README.md) compared the October accepted private-IOSurface implementation with current Metal2Vulkan master (commit d9236a8) using one identical correctness-checked 1080p test program. The older implementation had around 20–23% lower mean completion latency in that *host-side* workload. **Current master already contains a PrivateSurface classification**, and this is not a single-patch A/B or a guest screensaver comparison; details and reproducible source are included.
 
 ## Evidence boundaries
 

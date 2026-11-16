@@ -1,0 +1,34 @@
+--- accepted/os/linux/surface.rs
++++ master-compat/os/linux/surface.rs
+@@ -143,7 +143,7 @@
+     /// Only `create_backing`: core-owned staging surfaces are reached through GPU textures
+     /// and explicit prepare/synchronize, never exposed as guest CPU IOSurfaces. Each virtual
+     /// GPU's task-zero backing is used by that GPU's own runtime device and its reference views.
+-    legacy_gpu: Option<Mutex<Vec<metal2vulkan_runtime::Buffer>>>,
++    legacy_gpu: Option<Mutex<Vec<(metal2vulkan_runtime::Device, metal2vulkan_runtime::Buffer)>>>,
+     /// For a surface whose GPU writes never reach its memory, its count among the objects whose
+     /// GPU writes may reach read-only memory ([`crate::gpu::writes::any_kept`]).
+     _kept: Option<crate::gpu::writes::Keeping>,
+@@ -2537,9 +2537,11 @@
+     }
+     let cache = surface.data().legacy_gpu.as_ref()?;
+     let mut buffers = cache.lock();
+-    if let Some(buffer) = buffers
++    if let Some((_, buffer)) = buffers
+         .iter()
+-        .find(|buffer| std::ptr::eq(buffer.device().properties(), device.properties()))
++        // The buffered generation handle may expose different DeviceProperties from
++        // the caller's root Device; compare the original root handles instead.
++        .find(|(root, _)| std::ptr::eq(root.properties(), device.properties()))
+     {
+         return Some(Ok(buffer.clone()));
+     }
+@@ -2550,7 +2552,7 @@
+         metal2vulkan_runtime::ResourceOptions::private(),
+     );
+     Some(made.map(|buffer| {
+-        buffers.push(buffer.clone());
++        buffers.push((device.clone(), buffer.clone()));
+         buffer
+     }))
+ }

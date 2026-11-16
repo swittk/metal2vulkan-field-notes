@@ -1,0 +1,31 @@
+--- accepted/metal_space.rs
++++ master-api-compat/metal_space.rs
+@@ -631,3 +631,3 @@
+     /// device a buffer lies in it on, which those buffers' holds keep ([`Placing::pool_slot`]).
+-    reserved: Vec<Weak<rt::AddressPool>>,
++    reserved: Vec<(Weak<rt::AddressPool>, rt::Device)>,
+ }
+@@ -658,8 +658,12 @@
+     fn reservation(&mut self, device: &rt::Device) -> Result<Arc<rt::AddressPool>, rt::Error> {
+-        self.reserved.retain(|reserved| reserved.strong_count() > 0);
+-        let live = (self.reserved.iter()).filter_map(Weak::upgrade);
+-        let mut of_device =
+-            live.filter(|r| std::ptr::eq(r.device().properties(), device.properties()));
+-        if let Some(reserved) = of_device.next() {
+-            return Ok(reserved);
++        // A pool returns a generation handle while this consumer owns the root device.
++        // Comparing their DeviceProperties pointers is not an identity test in the
++        // current runtime; keep the root device handle used to make each reservation.
++        self.reserved.retain(|(weak, _device)| weak.strong_count() > 0);
++        for (weak, original) in &self.reserved {
++            if std::ptr::eq(original.properties(), device.properties()) {
++                if let Some(reserved) = weak.upgrade() {
++                    return Ok(reserved);
++                }
++            }
+         }
+@@ -667,3 +671,3 @@
+         let reserved = Arc::new(device.reserve_address_pool(at, POOL_BYTES)?);
+-        self.reserved.push(Arc::downgrade(&reserved));
++        self.reserved.push((Arc::downgrade(&reserved), device.clone()));
+         Ok(reserved)

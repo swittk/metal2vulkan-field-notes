@@ -1,10 +1,12 @@
 # Same-GPU standalone private-IOSurface benchmark — November 16, 2026
 
+**Scope update:** A [later real macOS forest screensaver A/B](../2026-11-16-sequoia-screensaver-ab/README.md) now directly answers the guest-workload question, at ~20.03% vs ~20.43% GPU busy across three valid 60-second runs each. The standalone latency comparison below remains valid for its *different synthetic workload* and must not be extrapolated to macOS screensaver utilization.
+
 A bounded **standalone Metal2Vulkan rendering comparison**, performed to answer the maintainer's question on [Metal2Vulkan #11](https://github.com/steelbrain/metal2vulkan/issues/11): how does our historical integrated private-backing implementation compare to **current upstream master**?
 
 ## What this DOES and DOES NOT establish
 
-We compared the **October 31 locally accepted, integrated Metal2Vulkan source** with upstream Metal2Vulkan [commit d9236a8](https://github.com/steelbrain/metal2vulkan/commit/d9236a8a11d3b90a1aa27b54e2d74d3891c4d2e5) from November 16. Both executables were built in Rust 1.98.1 release mode from identical [benchmark code](bench.rs), with identical [Cargo dependency lockfiles](Cargo.lock). Both ran on **the same physical NVIDIA RTX 2080 Ti (driver 580.126.09) used by our accepted macOS VM**. This is not the other eGPU.
+We compared the **October 31 locally accepted, integrated Metal2Vulkan source** with upstream Metal2Vulkan [commit d9236a8](https://github.com/steelbrain/metal2vulkan/commit/d9236a8a11d3b90a1aa27b54e2d74d3891c4d2e5) from November 16. Both executables were built in Rust 1.98.1 release mode from identical [benchmark code](bench.rs), with identical [Cargo dependency lockfiles](Cargo.lock). Both ran on **the same physical NVIDIA RTX 2080 Ti (driver 580.126.09) used by our accepted macOS VM**.
 
 This is a **host-side Metal2Vulkan-only experiment**, not the actual macOS screensaver. The running guest stayed alive and was not modified, rebooted, or switched to another image. Its GPU was idle before each benchmark start (0–2% sampled utilization); its background memory allocation and processes remained in place. Utilization readings therefore include this background load. The workload uses a 1920×1080 pitched RGBA8 surface, 32 bytes of row padding, a 256-byte offset, an internal GPU-private backing/IOSurface alias, one or four render clear/load/store passes per scheduled frame at 30 Hz, plus a 16×16 sampled pixel-region readback on every frame. **Every sampled texel was checked against the new expected frame color**; 30 Hz here is *requested submission pacing*, not measured QEMU presentation FPS.
 

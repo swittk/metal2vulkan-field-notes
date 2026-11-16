@@ -14,3 +14,7 @@ The broader **14-file combined REIMS/Metal2Vulkan** source diff, exact before/af
 Latest upstream master ([d9236a8](https://github.com/steelbrain/metal2vulkan/commit/d9236a8a11d3b90a1aa27b54e2d74d3891c4d2e5)) already has a distinct `PrivateSurface` branch for runtime-owned private IOSurface memory. The small October patch is therefore **not a missing master feature ready to cherry-pick**.
 
 In a [same-GPU eight-run standalone source comparison](../benchmarks/2026-11-16-master-vs-accepted/README.md), the old integrated implementation had lower mean completion latency, but the three-week source change includes many other semantics. It cannot be attributed to the one historical branch or used to predict guest desktop FPS without a full-stack matched test.
+
+## Actual macOS guest comparison with current master
+
+The [later full-guest macOS forest screensaver experiment](../benchmarks/2026-11-16-sequoia-screensaver-ab/README.md) measured **20.028% GPU busy for the accepted integration and 20.433% for current master** across three valid 60-second 30-FPS moving-frame runs each. This is a small integrated version difference on NVIDIA, not a direct isolated demonstration of the older classification patch or the earlier 76.7%→19.8% transition. Two REIMS-side root-versus-generation device identity fixes were needed for correct rendering with current master. Raw sensor and QEMU frame-hash evidence, plus those patches, are linked in the report.
