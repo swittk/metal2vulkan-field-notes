@@ -8,7 +8,7 @@ We compared the **October 31 locally accepted, integrated Metal2Vulkan source** 
 
 This is a **host-side Metal2Vulkan-only experiment**, not the actual macOS screensaver. The running guest stayed alive and was not modified, rebooted, or switched to another image. Its GPU was idle before each benchmark start (0–2% sampled utilization); its background memory allocation and processes remained in place. Utilization readings therefore include this background load. The workload uses a 1920×1080 pitched RGBA8 surface, 32 bytes of row padding, a 256-byte offset, an internal GPU-private backing/IOSurface alias, one or four render clear/load/store passes per scheduled frame at 30 Hz, plus a 16×16 sampled pixel-region readback on every frame. **Every sampled texel was checked against the new expected frame color**; 30 Hz here is *requested submission pacing*, not measured QEMU presentation FPS.
 
-Each condition ran twice, in **accepted → master → master → accepted** order. Four-pass trials ran for 12 seconds (360 frames each), and one-pass trials for 8 seconds (240 frames each). The matching runs emitted identical sampled output hashes. NVIDIA utilization/power/clock figures were sampled at 500 ms intervals within the timed portion. No streaming client was connected during the tests.
+Each condition ran twice, in **accepted → master → master → accepted** order. Four-pass trials ran for 12 seconds (360 frames each), and one-pass trials for 8 seconds (240 frames each). The matching runs emitted identical sampled output hashes. NVIDIA utilization/power/clock figures were sampled at 500 ms intervals within the timed portion. We did not initiate a streaming client for these tests; the existing streaming service was left unchanged.
 
 ## Results on this one GPU
 
