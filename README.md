@@ -8,6 +8,10 @@ Independent source and performance investigations from a macOS guest running on 
 
 The [actual 1080p animated macOS forest screensaver A/B](benchmarks/2026-11-16-sequoia-screensaver-ab/README.md) compared the working accepted REIMS integration with Metal2Vulkan master at pinned commit d9236a8, on the same NVIDIA RTX 2080 Ti. **Three valid 60-second runs per arm**, each with verified moving frames and approximately 30 guest presentations/s, measured **20.028% vs 20.433% GPU busy** respectively (a small 0.406-percentage-point difference). Full GPU/power/CPU/presentation observations, two REIMS root-device identity compatibility corrections, and the two explicitly rejected attempts are published with an offline validator. This real-guest study supersedes the **relevance** of the earlier standalone microbenchmark to screensaver performance; that synthetic test remains a separate, bounded result.
 
+## Spotlight self-read revalidation against current development (17 November 2026)
+
+The [latest REIMS + Metal2Vulkan 053e789a A/B evidence](evidence/spotlight-2026-11-17/README.md) now includes a **source-applicable diagnostic fix**, a native Metal test with repeated OFF/ON results, and both the **historical visual regression screenshot** and **new latest-development OFF/ON Spotlight screenshots**. The native Clear/self-read discrepancy persists, but the current GUI sequence **does not reproduce visible ghosting in either mode**. This is not a confirmation of a present-day visible Spotlight bug or a ready-to-merge fix. Existing issue: [Metal2Vulkan #17](https://github.com/steelbrain/metal2vulkan/issues/17). No new upstream comments or PRs were made.
+
 ## Published source and tests
 
 - [Private-owned IOSurface backing classification](patches/private-owned-iosurface-backing.patch): a small shape-based change checked against its pinned upstream source file. See [scope and risks](archive/private-backed-surfaces.md). The larger tested integration spans REIMS and Metal2Vulkan; no standalone upstream build of this patch is claimed.

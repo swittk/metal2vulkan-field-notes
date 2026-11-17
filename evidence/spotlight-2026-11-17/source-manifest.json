@@ -1,0 +1,23 @@
+{
+  "upstreamMetal2Vulkan": "053e789a0e962a09a1c382e68adfb8f2d5fefeba",
+  "reimsDevelopment": "8f8e14af003cc17eaeb5b82e768550b9e001b993",
+  "qemuBinarySha256": "66a660688cf6dea1cda06bdb259aa13d90ba2f9acd8dff2e259989364dd42f6a",
+  "patch": "patches/EXPERIMENTAL-spotlight-clear-selfread-m2v-053e789a.patch",
+  "patchSha256": "a36c27815dc76eab883792a1f458c33aac7fb27ace655f0339fdaa099fb23daf",
+  "screenshotSha256": {
+    "evidence/spotlight-2026-11-17/legacy-2026-10-29-spotlight-off-on.png": "c98cd69a24ec93258dd5138d07e7a8803e8132a81faa4d52b7251c257af21145",
+    "evidence/spotlight-2026-11-17/latest-2026-11-17-spotlight-off-on.png": "c855ff76e6e6b8c54f97b292293591376cfd7da03732f566d9aad9d58188b6d3"
+  },
+  "sourceFiles": {
+    "crates/metal2vulkan-runtime/src/render.rs": {
+      "baseSha256": "36454f8338d4751bddf6b24142ad34de4cafc1bffd421d58171bf75b94ab7198",
+      "patchedSha256": "d5ca0974e9ba61b570ca4a8adf40bb4a50ec0b7e91f3636e68a916d334e88265",
+      "status": "modified"
+    },
+    "crates/metal2vulkan-runtime/src/render/selfread_clear.rs": {
+      "baseSha256": null,
+      "patchedSha256": "d6a98940c7bc07b6195f1835f2cdf896f3103b343bf4c9ffc9e78e74fe53eb6e",
+      "status": "added"
+    }
+  }
+}

@@ -1,0 +1,130 @@
+diff --git a/crates/metal2vulkan-runtime/src/render.rs b/crates/metal2vulkan-runtime/src/render.rs
+index 5aadddd5c..54235dcde 100644
+--- a/crates/metal2vulkan-runtime/src/render.rs
++++ b/crates/metal2vulkan-runtime/src/render.rs
+@@ -437,6 +437,7 @@ mod replay;
+ mod reroute;
+ mod restart;
+ mod shadows;
++mod selfread_clear;
+ mod snapshot;
+ pub(crate) use snapshot::{LeadingShare, SplitReason};
+ mod table_facts;
+@@ -5787,6 +5788,10 @@ impl RenderLowering {
+         // rendered over their reach, its depth and stencil's too), and it had no other clear to
+         // make before it: no storage color or `DontCare` load but a memoryless color's
+         // (`render/inline_first.rs`).
++        // A bounded self-read compatibility path, recorded only where a
++        // matching Clear load owns every texel the first attached read needs.
++        // Preserve the original load actions before ReachClears rewrites them.
++        let selfread_layout = selfread_clear::enabled().then(|| layout.clone());
+         let reach_clears = match inline {
+             true => None,
+             false => ReachClears::plan(&device, &layout, called, &left_out, bounded)?,
+@@ -6141,6 +6146,12 @@ impl RenderLowering {
+         if let Some(first) = &first_texel_copies {
+             core.shadow_copies(first);
+         }
++        // Reproduce the Clear-loaded shadow the first draw would read, without
++        // changing the attached color, host memory, or any later read. This is
++        // the previous accepted Spotlight self-read compatibility contract.
++        if let (Some(original), Some(first)) = (&selfread_layout, &first_texel_copies) {
++            selfread_clear::record(&mut core, original, first)?;
++        }
+         if let Some(write) = nan_depth {
+             write.record(&mut core);
+             core.retain(write);
+diff --git a/crates/metal2vulkan-runtime/src/render/selfread_clear.rs b/crates/metal2vulkan-runtime/src/render/selfread_clear.rs
+new file mode 100644
+index 000000000..ebd3e1fdd
+--- /dev/null
++++ b/crates/metal2vulkan-runtime/src/render/selfread_clear.rs
+@@ -0,0 +1,88 @@
++//! Default-off diagnostic for a clear-loaded color sampled by its own first draw.
++//! Clears only an image-backed read shadow, never the attachment or host memory.
++use crate::encoder::EncoderCore;
++use crate::error::Error;
++use crate::render_pass::PassLayout;
++use crate::shadow::{ShadowCopy, ShadowSource, Step};
++use crate::tracker::{Access, Use};
++use ash::vk;
++use crate::render_values::LoadAction;
++use std::sync::{LazyLock, atomic::{AtomicU64, Ordering}};
++
++fn eligible(enabled: bool, samples: u32, layers: u32, clear: bool, source_matches: bool, into: bool, one_region: bool) -> bool {
++    enabled && samples == 1 && layers == 1 && clear && source_matches && into && one_region
++}
++
++// A copied shadow may cover more than the render area. Only substitute the clear
++// when every texel that this instance can read belongs to the known clear reach.
++fn read_is_cleared(area: Option<[u32; 4]>, extent: [u32; 2], cleared: [u32; 2]) -> bool {
++    let [x0, y0, x1, y1] = area.unwrap_or([0, 0, extent[0], extent[1]]);
++    x0 < x1 && y0 < y1 && x1 <= cleared[0] && y1 <= cleared[1]
++        && x1 <= extent[0] && y1 <= extent[1]
++}
++
++pub(super) fn enabled() -> bool {
++    static ON: LazyLock<bool> = LazyLock::new(|| std::env::var("REIMS_DIAG_SELFREAD_CLEAR").as_deref() == Ok("1"));
++    *ON
++}
++
++pub(super) fn record(core: &mut EncoderCore, layout: &PassLayout, copies: &[ShadowCopy]) -> Result<(), Error> {
++    if !enabled() || layout.samples != 1 || layout.layers != 1 { return Ok(()); }
++    for copy in copies {
++        let ShadowSource::Image { image, shadow, regions, through: None, .. } = &copy.copies.source else { continue; };
++        if regions.len() != 1 || !matches!(copy.step, Step::Into) { continue; }
++        let region = regions[0];
++        if region.src_offset != vk::Offset3D::default() || region.dst_offset != vk::Offset3D::default()
++            || region.extent.depth != 1 { continue; }
++        if region.src_subresource.aspect_mask != vk::ImageAspectFlags::COLOR || region.dst_subresource.layer_count != 1 { continue; }
++        for color in layout.colors.iter().flatten() {
++            if color.load != LoadAction::Clear || color.memoryless || color.target.layers != 1 { continue; }
++            let matches = color.target.texture.raw_image()? == image.raw()
++                && color.target.level == region.src_subresource.mip_level
++                && color.target.layer == region.src_subresource.base_array_layer;
++            if !eligible(enabled(), layout.samples, layout.layers, color.load == LoadAction::Clear, matches, matches!(copy.step, Step::Into), regions.len()==1) { continue; }
++            let cleared = crate::clear_reach::cleared(layout, &color.target, true);
++            if !read_is_cleared(copy.area, [region.extent.width, region.extent.height], cleared) { continue; }
++            let use_shadow = Use { key: copy.copies.shadow_key, range: copy.copies.shadow_range.clone(), tracked: copy.copies.tracked,
++                read: Access::NONE, write: Access { stages: vk::PipelineStageFlags2::CLEAR, access: vk::AccessFlags2::TRANSFER_WRITE } };
++            let range = vk::ImageSubresourceRange { aspect_mask: vk::ImageAspectFlags::COLOR,
++                base_mip_level: region.dst_subresource.mip_level, level_count: 1,
++                base_array_layer: region.dst_subresource.base_array_layer, layer_count: 1 };
++            let clear = color.clear;
++            core.command(vk::PipelineStageFlags2::CLEAR, &[use_shadow], |vk, raw| {
++                // SAFETY: this runs outside a render pass after the tracked copy-in.
++                // The source usage shadow is retained by the encoder's binding and has transfer-dst usage.
++                unsafe { vk.cmd_clear_color_image(raw, *shadow, vk::ImageLayout::GENERAL, &clear, &[range]); }
++            });
++            static HITS: AtomicU64 = AtomicU64::new(0);
++            let n = HITS.fetch_add(1, Ordering::Relaxed)+1;
++            if n<=12 || n.is_power_of_two() { eprintln!("REIMS_DIAG_SELFREAD_CLEAR hit={n} render={:?} target={:?} shadow={:?}", layout.extent, color.target.extent, copy.copies.shadow_key); }
++            break;
++        }
++    }
++    Ok(())
++}
++#[cfg(test)] mod tests {
++    use super::{eligible, read_is_cleared};
++    #[test] fn bounded_own_pixel_read_is_inside_tile_clear() {
++        assert!(read_is_cleared(Some([0,0,4,41]),[144,64],[32,64]));
++        assert!(read_is_cleared(Some([0,0,178,45]),[224,64],[192,64]));
++    }
++    #[test] fn outside_clear_uses_existing_snapshot() {
++        assert!(!read_is_cleared(None,[144,64],[32,64]));
++        assert!(!read_is_cleared(Some([0,0,37,41]),[144,64],[32,64]));
++        assert!(!read_is_cleared(Some([0,0,144,65]),[144,64],[144,64]));
++    }
++    #[test] fn full_clear_allows_full_read() { assert!(read_is_cleared(None,[144,64],[144,64])); }
++    #[test] fn empty_or_reversed_region_is_never_rewritten() {
++        assert!(!read_is_cleared(Some([3,0,2,8]),[144,64],[144,64]));
++        assert!(!read_is_cleared(Some([0,0,0,8]),[144,64],[144,64]));
++    }
++    #[test] fn disabled_does_not_change_any_pass() { assert!(!eligible(false,1,1,true,true,true,true)); }
++    #[test] fn clears_matching_first_read() { assert!(eligible(true,1,1,true,true,true,true)); }
++    #[test] fn does_not_touch_load_or_other_texture() { assert!(!eligible(true,1,1,false,true,true,true)); assert!(!eligible(true,1,1,true,false,true,true)); }
++    #[test] fn does_not_touch_multisample_layered_copyback_or_multiple_regions() {
++        assert!(!eligible(true,4,1,true,true,true,true)); assert!(!eligible(true,1,2,true,true,true,true));
++        assert!(!eligible(true,1,1,true,true,false,true)); assert!(!eligible(true,1,1,true,true,true,false));
++    }
++}

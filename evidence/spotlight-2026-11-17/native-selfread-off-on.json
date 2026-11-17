@@ -1,0 +1,91 @@
+{
+  "sourceRev": {
+    "metal2vulkan": "053e789a0e962a09a1c382e68adfb8f2d5fefeba",
+    "reims": "8f8e14af003cc17eaeb5b82e768550b9e001b993",
+    "qemuBinarySha256": "66a660688cf6dea1cda06bdb259aa13d90ba2f9acd8dff2e259989364dd42f6a"
+  },
+  "guest": "macOS Sequoia 15.8.1, x86_64",
+  "gpu": "NVIDIA RTX 2080 Ti; Linux host Vulkan",
+  "controlledSwitch": "REIMS_DIAG_SELFREAD_CLEAR=0 or 1; identical QEMU binary, same guest disk and resolution",
+  "runState": "3 completed native Metal repetitions per mode; all command completions status=4 and wrapper exits0",
+  "cases": {
+    "load=1,region=3x40,external=0": {
+      "off": {
+        "old": 120,
+        "cleared": 0,
+        "total": 120,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      },
+      "on": {
+        "old": 120,
+        "cleared": 0,
+        "total": 120,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      }
+    },
+    "load=2,region=3x40,external=1": {
+      "off": {
+        "old": 120,
+        "cleared": 0,
+        "total": 120,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      },
+      "on": {
+        "old": 120,
+        "cleared": 0,
+        "total": 120,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      }
+    },
+    "load=2,region=3x40,external=0": {
+      "off": {
+        "old": 120,
+        "cleared": 0,
+        "total": 120,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      },
+      "on": {
+        "old": 0,
+        "cleared": 120,
+        "total": 120,
+        "status": 4,
+        "pixel": "0,0,0,0"
+      }
+    },
+    "load=2,region=144x64,external=0": {
+      "off": {
+        "old": 9216,
+        "cleared": 0,
+        "total": 9216,
+        "status": 4,
+        "pixel": "255,64,127,255"
+      },
+      "on": {
+        "old": 0,
+        "cleared": 9216,
+        "total": 9216,
+        "status": 4,
+        "pixel": "0,0,0,0"
+      }
+    }
+  },
+  "visual": {
+    "legacy": "October 29 pre-upstream-transplant REIMS/Metal2Vulkan version: visible retained glyphs and multiple carets OFF, clean ON",
+    "latest": "November 17 latest development: matched Control+Space Spotlight QMP capture in OFF and ON; no obvious retained glyphs/carets in either, so current GUI regression NOT confirmed",
+    "currentScreenshotMethod": "Actual QEMU screendump PPM, device gfx head0; VNC keyboard input Control+Space and 18-character query System preferences",
+    "query": "System preferences",
+    "framesEach": 24
+  },
+  "limitations": [
+    "No physical native-Metal reference on a real Mac in this A/B",
+    "The visible legacy symptom is NOT reproduced by the latest current-development GUI capture",
+    "This is a default-off diagnostic patch, NOT a production-ready upstream fix",
+    "The native guest GPU readback test exposes a distinct semantic mismatch on current development",
+    "The QEMU binary also contains independent chroma and NVENC compatibility patches held constant in OFF/ON"
+  ]
+}
