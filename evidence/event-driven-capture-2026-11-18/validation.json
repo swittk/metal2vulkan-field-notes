@@ -1,0 +1,309 @@
+{
+  "experiment": "Event-driven guest-present notifications across REIMS/QEMU/Sunshine; fixed 16 ms polling expressly rejected",
+  "date": "2026-11-18",
+  "sourcePins": {
+    "reims": "8f8e14af003cc17eaeb5b82e768550b9e001b993",
+    "vendorQemu": "f56d36ff50346f90a6dbf27e2570eeb98bb2387c",
+    "metal2vulkan": "053e789a0e962a09a1c382e68adfb8f2d5fefeba",
+    "sunshineIntegration": "96cf5ee"
+  },
+  "binaries": {
+    "qemuSha256": "615e53e39c715cda9e60229356208748e07970343f3fb99fb0bf34e9bf7b448a",
+    "sunshineSha256": "eccebafc8525430954c32a2d8d71c7b174f02011c9ee9068641fb22e3fdac1d4"
+  },
+  "case": {
+    "guest": "macOS Sequoia 15.8.1, 4 vCPU, 8 GiB",
+    "display": "1920x1080",
+    "host": "Linux/Vulkan, NVIDIA RTX 2080 Ti",
+    "codec": "HEVC",
+    "requestedFps": 60,
+    "bitrateKbps": 15000,
+    "nativeWindowMoveHz": 40,
+    "guestDurationSeconds": 275,
+    "captureTrigger": "guest presentation notifications, no capture timer",
+    "sunshineMailboxTimeout": "500 ms interruption timeout only; does not initiate captures",
+    "qemuGenericUiRefresh": "retained, cached-return when no dirty present"
+  },
+  "guestMotion": {
+    "ticks": 10996,
+    "maxIntervalMs": 51.302,
+    "timerGapsOver60": 0,
+    "durationMs": 275001.158,
+    "runExit": 0
+  },
+  "hevc": {
+    "encodedSha256": "bb8d528a90e46d8a25ccd2a069a5f76de881a6dc2fd27279a874a7b04aeca756",
+    "bytes": 162194290,
+    "decodedFrames": 12607,
+    "decodedCleanly": true,
+    "activeSeconds": 272.931,
+    "activeFrames": 12057,
+    "receiveFramesPerSecond": 44.177,
+    "receiveGapMs": {
+      "count": 12056,
+      "p50": 19.4653,
+      "p99": 37.2892,
+      "max": 41.8937,
+      "over60": 0,
+      "over100": 0
+    },
+    "capturePresentationGapMs": {
+      "count": 12056,
+      "p50": 18.833,
+      "p99": 39.011,
+      "max": 59.389,
+      "over60": 0,
+      "over100": 0
+    },
+    "hostProcessingLatencyMs": {
+      "count": 11030,
+      "p50": 14.1,
+      "p99": 17.7,
+      "max": 20.6,
+      "over60": 0,
+      "over100": 0
+    },
+    "positionHoldMs": {
+      "count": 10698,
+      "p50": 23.915,
+      "p99": 54.4167,
+      "max": 89.3752,
+      "over60": 52,
+      "over100": 0
+    },
+    "unexpectedDirectionReversals": 0,
+    "crossScanlineMismatches": 0,
+    "missingActiveMarkers": 0,
+    "nonconsecutiveFrameNumbers": 0
+  },
+  "pipeline": {
+    "collection": "COMPLETE",
+    "counts": {
+      "request": 21157,
+      "refresh": 20100,
+      "updatemap": 11280,
+      "pin": 11405,
+      "pinret": 11405,
+      "latch": 11405,
+      "notify": 11405,
+      "latchret": 11405,
+      "framebh": 11498,
+      "read": 11399,
+      "readret": 11399,
+      "done": 11399,
+      "console": 11399,
+      "doneret": 11399
+    },
+    "returnDurationsMs": {
+      "pin": {
+        "count": 11405,
+        "min": 0.011,
+        "p50": 0.029,
+        "p95": 0.06,
+        "p99": 0.102,
+        "p999": 0.264,
+        "max": 0.639,
+        "over60": 0,
+        "over100": 0
+      },
+      "latch": {
+        "count": 11405,
+        "min": 0.007,
+        "p50": 0.04,
+        "p95": 0.07,
+        "p99": 0.102,
+        "p999": 0.168,
+        "max": 0.36,
+        "over60": 0,
+        "over100": 0
+      },
+      "read": {
+        "count": 11399,
+        "min": 2.56,
+        "p50": 3.689,
+        "p95": 6.958,
+        "p99": 9.017,
+        "p999": 11.702,
+        "max": 14.697,
+        "over60": 0,
+        "over100": 0
+      },
+      "done": {
+        "count": 11399,
+        "min": 1.283,
+        "p50": 2.107,
+        "p95": 4.776,
+        "p99": 5.95,
+        "p999": 7.478,
+        "max": 10.029,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "remainingProbes": [],
+    "activeStageStats": {
+      "done": {
+        "count": 11030,
+        "hz": 40.414,
+        "gapMs": {
+          "count": 11029,
+          "p50": 20.824,
+          "p99": 51.071,
+          "max": 74.552,
+          "over60": 29,
+          "over100": 0
+        }
+      },
+      "refresh": {
+        "count": 16376,
+        "hz": 60.0,
+        "gapMs": {
+          "count": 16375,
+          "p50": 16.667,
+          "p99": 16.776,
+          "max": 20.132,
+          "over60": 0,
+          "over100": 0
+        }
+      },
+      "console": {
+        "count": 11030,
+        "hz": 40.414,
+        "gapMs": {
+          "count": 11029,
+          "p50": 20.786,
+          "p99": 51.292,
+          "max": 74.543,
+          "over60": 29,
+          "over100": 0
+        }
+      },
+      "updatemap": {
+        "count": 11030,
+        "hz": 40.414,
+        "gapMs": {
+          "count": 11029,
+          "p50": 20.783,
+          "p99": 51.293,
+          "max": 74.548,
+          "over60": 29,
+          "over100": 0
+        }
+      },
+      "pin": {
+        "count": 11036,
+        "hz": 40.433,
+        "gapMs": {
+          "count": 11035,
+          "p50": 19.379,
+          "p99": 50.614,
+          "max": 74.586,
+          "over60": 17,
+          "over100": 0
+        }
+      },
+      "latch": {
+        "count": 11035,
+        "hz": 40.435,
+        "gapMs": {
+          "count": 11034,
+          "p50": 20.927,
+          "p99": 50.897,
+          "max": 78.369,
+          "over60": 28,
+          "over100": 0
+        }
+      },
+      "notify": {
+        "count": 11035,
+        "hz": 40.435,
+        "gapMs": {
+          "count": 11034,
+          "p50": 20.927,
+          "p99": 50.895,
+          "max": 78.396,
+          "over60": 28,
+          "over100": 0
+        }
+      },
+      "framebh": {
+        "count": 11126,
+        "hz": 40.768,
+        "gapMs": {
+          "count": 11125,
+          "p50": 20.296,
+          "p99": 50.692,
+          "max": 74.294,
+          "over60": 27,
+          "over100": 0
+        }
+      },
+      "request": {
+        "count": 20034,
+        "hz": 73.408,
+        "gapMs": {
+          "count": 20033,
+          "p50": 13.256,
+          "p99": 30.066,
+          "max": 32.109,
+          "over60": 0,
+          "over100": 0
+        }
+      },
+      "read": {
+        "count": 11029,
+        "hz": 40.413,
+        "gapMs": {
+          "count": 11028,
+          "p50": 20.743,
+          "p99": 50.784,
+          "max": 74.421,
+          "over60": 27,
+          "over100": 0
+        }
+      }
+    }
+  },
+  "streamProcess": {
+    "moonlightExit": 0,
+    "profilerExit": 0,
+    "normalSunshineRestored": true
+  },
+  "recorder": {
+    "videoFrameLimit": 25000,
+    "audioPacketLimit": 80000,
+    "librarySha256": "08822619e7401cc9bc25631d0a2cf8c802d3aa3291fed46d13f788be16f4c74e",
+    "note": "recorder-only limit lifted from 9000; does not change stream cadence"
+  },
+  "patches": {
+    "EVENT-01-reims-display-shown-callback-20261118.patch": {
+      "sha256": "9d578c585435d1775e5bd3e93c5f04fb4bd7b3424655d316f4b62fb637027664",
+      "bytes": 11829
+    },
+    "EVENT-02-qemu-present-driven-20261118.patch": {
+      "sha256": "8cba8102f8c0f2fbc00113f726a2fda3f17de8ac4fca89d55326e66c4912917e",
+      "bytes": 5874
+    },
+    "EVENT-03-sunshine-no-periodic-pacing-20261118.patch": {
+      "sha256": "6d6ee46fe2b6149bf5b984a2b6fc5c2988ff570bccb735d4f7876cb54556d556",
+      "bytes": 3524
+    }
+  },
+  "notMeasured": [
+    "physical Moonlight device display timing",
+    "user LAN/VPN jitter",
+    "full application UX beyond deterministic window animation"
+  ],
+  "checks": {
+    "rustCargoCheck": "PASS, reims-vgpu and reims-vgpu-c",
+    "rustReleaseDist": "PASS",
+    "qemuCCompileAndLink": "PASS",
+    "perDisplayReadbackNotificationUnitTest": "PASS, 1 passed, 0 failed, 855 filtered",
+    "pristineSourcePatchApplication": "PASS, all three patches against exact HEAD",
+    "qmpRejectedPollingPropertyAbsent": true,
+    "guestMotionCompleted": true,
+    "hevcDecodedAndValidated": true,
+    "ownedPerfProbesCleaned": true,
+    "normalSunshineRestored": true
+  }
+}

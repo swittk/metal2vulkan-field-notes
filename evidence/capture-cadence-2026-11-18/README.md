@@ -1,3 +1,5 @@
+> **REJECTED — HISTORICAL MEASUREMENT ONLY (18 November 2026).** The owner had already rejected fixed-interval display polling; the 16 ms implementation described below was mistakenly reintroduced and has been **rolled back and replaced**. Do **not** use the 16 ms QEMU patch, QOM refresh control, or a fixed frame sleep as an implementation or recommendation. See the [event-driven REIMS/QEMU/Sunshine fix](../event-driven-capture-2026-11-18/README.md). The numbers below remain the faithful measurements of a rejected experiment, not an accepted design.
+
 # Capture cadence investigation — 18 November 2026
 
 ## Result and scope

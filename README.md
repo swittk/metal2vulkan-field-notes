@@ -16,9 +16,9 @@ The [latest REIMS + Metal2Vulkan 053e789a A/B evidence](evidence/spotlight-2026-
 
 The [green-block corruption report, actual QEMU before/after screenshots, native Metal 12-frame A/B, numeric results and current-development patch](evidence/chroma-2026-11-17/README.md) demonstrate incorrect shader reads of an exported nonzero-offset RG16Unorm chroma plane. The same-binary diagnostic A/B found 312–656 incorrect U/V sample positions per frame before alias refusal and none afterward; the newer patched development also passed. This is separate from Spotlight Clear/self-read.
 
-## Desktop capture cadence follow-up (18 November 2026)
+## Event-driven desktop capture (18 November 2026)
 
-The [fresh motion recordings, source fixes, and timing data](evidence/capture-cadence-2026-11-18/README.md) identify a 30 ms QEMU D-Bus capture limit and accumulated copy-time delay in the local Sunshine adapter. Combined changes deliver **59.996 received fps** at the unchanged requested 1080p60 settings. A/B/A controls, a timestamp-preserving before/after motion clip, latency tradeoffs, and the limits of the local receiver test are included. The larger reported periodic twitch is not claimed resolved, and no new upstream communication was made.
+**Fixed capture polling is rejected.** The earlier [16 ms polling study](evidence/capture-cadence-2026-11-18/README.md) is archived only as a measurement, not a solution. The [replacement REIMS → QEMU → Sunshine event-driven capture implementation](evidence/event-driven-capture-2026-11-18/README.md) notifies consumers when the guest actually presents a frame, coalesces pending asynchronous readbacks, and blocks for new captured frames instead of sleeping to sample stale content. It preserves the requested resolution, codec and nominal frame-rate capability. It is separate from Metal2Vulkan's Spotlight issue.
 
 ## Published source and tests
 

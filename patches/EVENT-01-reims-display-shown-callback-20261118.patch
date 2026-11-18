@@ -1,0 +1,248 @@
+diff --git a/crates/reims-vgpu-c/include/reims_vgpu.h b/crates/reims-vgpu-c/include/reims_vgpu.h
+index 584f414..08f35d1 100644
+--- a/crates/reims-vgpu-c/include/reims_vgpu.h
++++ b/crates/reims-vgpu-c/include/reims_vgpu.h
+@@ -322,6 +322,17 @@ typedef void (*RvgCursorShowAtFn)(void *ctx, uint32_t display, uint8_t show);
+ // Thread, and what it may call: as RvgCursorGlyphFn, in order with every display callback.
+ typedef void (*RvgCursorMoveAtFn)(void *ctx, uint32_t display);
+ 
++// `display_shown(ctx, display)`: a guest surface present (including a keep with
++// changed colour) became the display's current image, or a reset restored its
++// scanout. Called after any writers needed by the present have finished. The
++// callback may run on the graphics library's completion or service threads,
++// possibly inside its present-queue lock. It must return promptly, must not
++// call into the library, and must not wait for the host's UI lock. The host
++// can enqueue an asynchronous read of the display and coalesce notifications
++// while the read is pending; a read may wait for GPU rendering to finish.
++// Without it, hosts may continue to use their existing pull display protocol.
++typedef void (*RvgGraphicsDisplayShownFn)(void *ctx, uint32_t display);
++
+ // The graphics device's callbacks.
+ //
+ // The cursor's three tell the host the guest's cursor on the device's display, for a host that
+@@ -366,6 +377,9 @@ typedef struct {
+   // cursor_move of display 1 and up: rvg_graphics_device_cursor_position_at reads where. A
+   // host built before it gives none.
+   RvgCursorMoveAtFn cursor_move_at;
++  // The display's newly shown image is ready to be read by the host on its own
++  // thread; absent for hosts whose struct_size ends before this field.
++  RvgGraphicsDisplayShownFn display_shown;
+ } RvgGraphicsCallbacks;
+ 
+ // `pointer(ctx, x, y, width, height, buttons)`: the pointer is at (`x`, `y`) in the guest's
+diff --git a/crates/reims-vgpu-c/src/graphics.rs b/crates/reims-vgpu-c/src/graphics.rs
+index 0cceb22..fd5cd59 100644
+--- a/crates/reims-vgpu-c/src/graphics.rs
++++ b/crates/reims-vgpu-c/src/graphics.rs
+@@ -11,7 +11,8 @@ use std::ffi::c_void;
+ use std::sync::Arc;
+ 
+ use reims_vgpu::{
+-    GraphicsCallbacks, GraphicsConfig, GraphicsDevice, GraphicsRaiseFn, GuestArch, RawDoorbell,
++    GraphicsCallbacks, GraphicsConfig, GraphicsDevice, GraphicsDisplayShownFn, GraphicsRaiseFn,
++    GuestArch, RawDoorbell,
+ };
+ #[cfg(not(windows))]
+ use reims_vgpu::{GraphicsRouteDoorbellFn, GraphicsRouteDoorbellPageFn};
+@@ -196,6 +197,13 @@ pub type RvgGraphicsRouteDoorbellPageFn = Option<
+     ) -> bool,
+ >;
+ 
++/// `display_shown(ctx, display)`: a new displayed surface or colour became
++/// visible, on a graphics completion/service thread. It must not block or call
++/// the library, as it may run inside the present-queue lock. The host may
++/// enqueue an asynchronous GPU read and coalesce pending notifications.
++pub type RvgGraphicsDisplayShownFn =
++    Option<unsafe extern "C-unwind" fn(ctx: *mut c_void, display: u32)>;
++
+ /// The graphics device's callbacks.
+ ///
+ /// The cursor's three tell the host the guest's cursor on the device's display, for a host that
+@@ -246,6 +254,8 @@ pub struct RvgGraphicsCallbacks {
+     /// cursor_move of display 1 and up: rvg_graphics_device_cursor_position_at reads where. A
+     /// host built before it gives none.
+     pub cursor_move_at: RvgCursorMoveAtFn,
++    /// Notifies an asynchronous display consumer after a guest presentation was shown.
++    pub display_shown: RvgGraphicsDisplayShownFn,
+ }
+ 
+ // SAFETY: repr(C), a u32 first; a pointer and optional function pointers.
+@@ -529,9 +539,19 @@ unsafe fn create(
+         });
+         route
+     });
++    let display_shown = callbacks.display_shown.map(|f| {
++        let t = table.clone();
++        let shown: GraphicsDisplayShownFn = Arc::new(move |display| {
++            // SAFETY: the host's callback and its live table; it schedules work
++            // but must never call back into the graphics device from here.
++            ffi::host_call("display_shown", || unsafe { f(t.ctx(), display) });
++        });
++        shown
++    });
+     let config = GraphicsConfig {
+         callbacks: GraphicsCallbacks {
+             raise_interrupt,
++            display_shown,
+             cursor_glyph: cursor_glyph(&table, callbacks.cursor_glyph),
+             cursor_show: cursor_show(&table, callbacks.cursor_show),
+             cursor_move: cursor_move(&table, callbacks.cursor_move),
+diff --git a/crates/reims-vgpu/src/graphics.rs b/crates/reims-vgpu/src/graphics.rs
+index f0863de..3ed83d7 100644
+--- a/crates/reims-vgpu/src/graphics.rs
++++ b/crates/reims-vgpu/src/graphics.rs
+@@ -172,6 +172,13 @@ pub use decode::{GraphicsVideo, GraphicsVideoSession, PlanePages, VideoDecode, V
+ /// Raises MSI-X vector `vector`: the device's interrupt.
+ pub type GraphicsRaiseFn = Arc<dyn Fn(u32) + Send + Sync>;
+ 
++/// A display's guest present became the currently shown image. Called only after the
++/// present's writers and surface fill were accepted by the present queue. The callback
++/// may run on any of its service or GPU-completion threads; it must not block, take a
++/// lock held across a library call, or call back into the graphics device. A host can
++/// schedule a read of that display on its own event loop, coalescing outstanding reads.
++pub type GraphicsDisplayShownFn = Arc<dyn Fn(u32) + Send + Sync>;
++
+ /// `(route, ring_id, bell)`: with `Some(bell)`, routes a command queue's plain doorbell, a
+ /// `DOORBELL` write of `ring_id`, into the file `bell` (an eventfd the queue's thread sleeps on)
+ /// where the host takes such a write with no thread of its running it (QEMU: a KVM
+@@ -258,6 +265,9 @@ pub struct GraphicsCallbacks {
+     /// `cursor_move` of display 1 and up, `(display)`: [`GraphicsDevice::cursor_position_at`]
+     /// reads where.
+     pub cursor_move_at: Option<CursorMoveAtFn>,
++    /// A new surface or changed colour became visible on `display`, without waiting
++    /// for a periodic host GUI refresh. The host should only schedule work here.
++    pub display_shown: Option<GraphicsDisplayShownFn>,
+     /// Routes a command queue's plain doorbell into its bell, or drops the route. Without it every
+     /// doorbell write comes through [`GraphicsDevice::mmio_write_taking`].
+     pub route_doorbell: Option<GraphicsRouteDoorbellFn>,
+@@ -720,9 +730,13 @@ impl<P: ApiPlatform> GraphicsDevice<P> {
+             }
+             // Each display's presented surface, display `i`'s at index `i`.
+             let presented: Vec<Arc<Presented<P>>> = (0..count)
+-                .map(|_| {
++                .map(|display| {
+                     let clock = Arc::clone(&platform);
+-                    Arc::new(Presented::new(Box::new(move || clock.clock().now_mono())))
++                    Arc::new(Presented::new(
++                        Box::new(move || clock.clock().now_mono()),
++                        u32::try_from(display).unwrap_or_default(),
++                        config.callbacks.display_shown.clone(),
++                    ))
+                 })
+                 .collect();
+             let presents = Arc::new(PresentQueue::new(presented.clone()));
+@@ -1204,6 +1218,9 @@ pub(crate) struct Presented<P: Platform> {
+     refused: AtomicBool,
+     /// The presents' answers, owed until the device's display shows them.
+     answers: PresentAnswers<PresentAnswer>,
++    /// A host notification after the display image changes, never a periodic poll.
++    on_shown: Option<GraphicsDisplayShownFn>,
++    display_index: u32,
+     /// The last (surface, drawable) pixel formats logged.
+     formats: Mutex<Option<(u64, u64)>>,
+     /// The display's colour (`color`), and how many times a present or the reset changed it,
+@@ -1215,17 +1232,25 @@ pub(crate) struct Presented<P: Platform> {
+ #[cfg(test)]
+ impl<P: Platform> Default for Presented<P> {
+     fn default() -> Self {
+-        Presented::new(Box::new(
+-            reims_vgpu_vulkan::core::platform::os::clock::MonoTime::default,
+-        ))
++        Presented::new(
++            Box::new(reims_vgpu_vulkan::core::platform::os::clock::MonoTime::default),
++            0,
++            None,
++        )
+     }
+ }
+ 
+ impl<P: Platform> Presented<P> {
+     /// Nothing shown yet: the scanout, with every colour stage off; the presents' timing lines
+     /// read `now`, the platform's monotonic clock.
+-    fn new(now: compile::Now) -> Self {
++    fn new(
++        now: compile::Now,
++        display_index: u32,
++        on_shown: Option<GraphicsDisplayShownFn>,
++    ) -> Self {
+         Presented {
++            on_shown,
++            display_index,
+             texture: Mutex::new(None),
+             retired: Mutex::default(),
+             holds: Mutex::default(),
+@@ -1327,6 +1352,11 @@ impl<P: Platform> Presented<P> {
+             }
+             None => answer.answer(RGFX_STATUS_OK),
+         }
++        // The texture/colour is now the display's. An event-driven console may
++        // start an asynchronous read; the callback itself must not read or wait.
++        if let Some(notify) = &self.on_shown {
++            notify(self.display_index);
++        }
+         hold
+     }
+ 
+@@ -1412,6 +1442,9 @@ impl<P: Platform> Presented<P> {
+         if let Some(window) = self.window.get() {
+             window.new_frame();
+         }
++        if let Some(notify) = &self.on_shown {
++            notify(self.display_index);
++        }
+     }
+ 
+     /// The window draws the latest present: the presents shown after it are answered once the
+diff --git a/crates/reims-vgpu/src/graphics/tests/displays.rs b/crates/reims-vgpu/src/graphics/tests/displays.rs
+index 243faf3..eb024dd 100644
+--- a/crates/reims-vgpu/src/graphics/tests/displays.rs
++++ b/crates/reims-vgpu/src/graphics/tests/displays.rs
+@@ -89,6 +89,34 @@ fn each_display_reads_back_and_one_past_the_count_is_refused() {
+     assert_eq!(device.cursor_position(), device.cursor_position_at(0));
+ }
+ 
++/// Each head's reset changes what it shows and therefore notifies the host once.
++/// Reading a surface does not notify: the host never has to poll for another frame.
++#[test]
++fn a_display_change_notifies_each_head_but_readback_does_not() {
++    let told = Arc::new(Mutex::new(Vec::new()));
++    let notifications = Arc::clone(&told);
++    let device = headless_of(
++        2,
++        GraphicsCallbacks {
++            display_shown: Some(Arc::new(move |head| notifications.lock().push(head))),
++            ..GraphicsCallbacks::default()
++        },
++    );
++    assert!(told.lock().is_empty());
++    let mut pixels = vec![0; 1920 * 1080 * 4];
++    for head in 0..2 {
++        assert_eq!(device.read_display_at(head, &mut pixels).1, Ok(()));
++    }
++    assert!(told.lock().is_empty(), "a read does not create a present");
++    device.reset();
++    eventually(|| told.lock().len() == 2);
++    assert_eq!(*told.lock(), [0, 1]);
++    for head in 0..2 {
++        assert_eq!(device.read_display_at(head, &mut pixels).1, Ok(()));
++    }
++    assert_eq!(*told.lock(), [0, 1]);
++}
++
+ /// What the host's cursor callbacks of every display were told, in order: the display, then
+ /// what.
+ type ToldAt = Arc<Mutex<Vec<(u32, Told)>>>;
+diff --git a/crates/reims-vgpu/src/lib.rs b/crates/reims-vgpu/src/lib.rs
+index fba9da6..2b05821 100644
+--- a/crates/reims-vgpu/src/lib.rs
++++ b/crates/reims-vgpu/src/lib.rs
+@@ -39,7 +39,8 @@ pub use cursor::{
+ };
+ pub use error::Error;
+ pub use graphics::{
+-    GraphicsCallbacks, GraphicsConfig, GraphicsDevice, GraphicsRaiseFn, GraphicsRouteDoorbellFn,
++    GraphicsCallbacks, GraphicsConfig, GraphicsDevice, GraphicsDisplayShownFn, GraphicsRaiseFn,
++    GraphicsRouteDoorbellFn,
+     GraphicsRouteDoorbellPageFn, GraphicsVideo, GraphicsVideoSession, GuestArch, LET_GO_BOUND,
+     PlanePages, VideoDecode, VideoPlane,
+ };

@@ -15,3 +15,5 @@
 The [private internal-backing case](archive/private-backed-surfaces.md) has an independently checked small classification patch but not an end-to-end current-master hardware validation. Any future upstream issue or PR would need a scoped reproduction on the present architecture.
 
 No new upstream issues, PRs or comments were posted while curating this expanded source archive.
+
+**18 November 2026:** Owner explicitly rejected fixed-period capture polling, including the reported 16 ms workaround. Its prior benchmark is now archived as rejected. A new [event-driven REIMS/QEMU/Sunshine capture patch suite](evidence/event-driven-capture-2026-11-18/README.md) replaces that design; this is our own testing archive and **not** an upstream comment or PR.

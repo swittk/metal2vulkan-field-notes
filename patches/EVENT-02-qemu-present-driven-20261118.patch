@@ -1,0 +1,140 @@
+diff --git a/hw/display/reims-graphics-pci.c b/hw/display/reims-graphics-pci.c
+index b182de3916..675e93b55d 100644
+--- a/hw/display/reims-graphics-pci.c
++++ b/hw/display/reims-graphics-pci.c
+@@ -158,6 +158,11 @@ typedef struct ReimsGraphicsHead {
+     uint32_t index;
+     QemuConsole *con;
+     bool read_running; /* s->read_lock protected: a read is in the library */
++    /* The library's present callback sets this atomically on its thread.
++     * The BQL's read start consumes it; an event while reading triggers one
++     * more read after this one finishes, not a queue of obsolete frames.
++     */
++    int presented_dirty;
+ 
+     /* Mutable state (BQL protected) */
+     QEMUCursor *cursor;     /* the guest's cursor image, or NULL */
+@@ -198,6 +203,8 @@ struct ReimsGraphicsPCIState {
+     QemuMutex event_lock;
+     QSIMPLEQ_HEAD(, ReimsGraphicsEvent) events; /* event_lock protected */
+     QEMUBH *event_bh;
++    /* Coalesced displayed-frame notifications; never a periodic capture tick. */
++    QEMUBH *frame_bh;
+ 
+     char *resolution; /* the property: each window's first size, or NULL */
+     uint32_t displays; /* the property: 1 to RVG_GRAPHICS_DISPLAYS_MAX */
+@@ -1187,6 +1194,22 @@ typedef struct ReimsGraphicsReadJob {
+ 
+ static void reims_graphics_pci_read_done_bh(void *opaque);
+ 
++/* Called where a present actually becomes the displayed surface, possibly
++ * while the library holds its present queue's lock. Only an atomic store and
++ * a BH schedule are legal here: GPU readback and QEMU display updates happen
++ * later under the BQL, never on a GPU-completion/service thread.
++ */
++static void reims_graphics_pci_frame_presented_cb(void *ctx, uint32_t display)
++{
++    ReimsGraphicsPCIState *s = ctx;
++
++    if (display >= s->displays) {
++        return;
++    }
++    qatomic_set(&s->heads[display].presented_dirty, 1);
++    qemu_bh_schedule(s->frame_bh);
++}
++
+ static int reims_graphics_pci_do_read(void *opaque)
+ {
+     ReimsGraphicsReadJob *job = opaque;
+@@ -1267,6 +1290,13 @@ static void reims_graphics_pci_read_done_bh(void *opaque)
+      * that waits for it, a screendump's, never waits for another.
+      */
+     qemu_console_hw_update_done(head->con);
++    /* A newer guest frame arrived while the GPU read was in flight. Read
++     * the latest once more, but only after the previous read has completed:
++     * no unbounded queue and no arbitrary polling interval.
++     */
++    if (head->con && qatomic_read(&head->presented_dirty)) {
++        qemu_bh_schedule(head->s->frame_bh);
++    }
+ }
+ 
+ /*
+@@ -1318,6 +1348,13 @@ static bool reims_graphics_pci_gfx_update(void *opaque)
+     if (!s->device || !s->pool) {
+         return true;
+     }
++    /* QMP screendumps and the generic GUI timer can still ask for the
++     * console's current surface. Neither starts a GPU read unless the guest
++     * has actually presented something new: the notification is the clock.
++     */
++    if (!qatomic_xchg(&head->presented_dirty, 0)) {
++        return true;
++    }
+     head->reading = true;
+     timer_mod(head->read_bound, qemu_clock_get_ms(QEMU_CLOCK_REALTIME) +
+                                 REIMS_GRAPHICS_PCI_READ_LATE_MS);
+@@ -1371,6 +1408,26 @@ static bool reims_graphics_pci_read_ended(ReimsGraphicsPCIState *s)
+     return true;
+ }
+ 
++/* Runs on QEMU's main event loop, coalescing notifications from the guest's
++ * presentation threads. Each head has at most one GPU read in flight; a
++ * present during that read remains marked dirty for its completion BH.
++ */
++static void reims_graphics_pci_frame_bh(void *opaque)
++{
++    ReimsGraphicsPCIState *s = opaque;
++    uint32_t i;
++
++    assert(bql_locked());
++    for (i = 0; i < s->displays; i++) {
++        ReimsGraphicsHead *head = &s->heads[i];
++
++        if (head->con && !head->reading &&
++            qatomic_read(&head->presented_dirty)) {
++            reims_graphics_pci_gfx_update(head);
++        }
++    }
++}
++
+ static const GraphicHwOps reims_graphics_pci_console_ops = {
+     .gfx_update = reims_graphics_pci_gfx_update,
+ };
+@@ -1686,6 +1743,7 @@ static void reims_graphics_pci_realize(PCIDevice *dev, Error **errp)
+         .cursor_glyph_at = reims_graphics_cursor_glyph_at_cb,
+         .cursor_show_at = reims_graphics_cursor_show_at_cb,
+         .cursor_move_at = reims_graphics_cursor_move_at_cb,
++        .display_shown = reims_graphics_pci_frame_presented_cb,
+     };
+     /* Each display's window, its callbacks' ctx the display's head. */
+     RvgWindowCallbacks window_callbacks[RVG_GRAPHICS_DISPLAYS_MAX];
+@@ -1809,8 +1867,12 @@ static void reims_graphics_pci_realize(PCIDevice *dev, Error **errp)
+                     TYPE_REIMS_GRAPHICS_PCI);
+     }
+ 
+-    /* The windows' input runs from here on; the callbacks need the BHs. */
++    /* Window input and newly presented frames enter QEMU on its event loop.
++     * Both BHs stay alive through teardown, as callbacks can still arrive
++     * from the library's graphics threads after device release.
++     */
+     s->event_bh = qemu_bh_new(reims_graphics_event_bh, s);
++    s->frame_bh = qemu_bh_new(reims_graphics_pci_frame_bh, s);
+     status = rvg_graphics_device_create(&config, &s->device);
+     if (status != RVG_OK) {
+         error_setg(errp, "%s: rvg_graphics_device_create: %s",
+@@ -1923,10 +1985,13 @@ static void reims_graphics_pci_finalize(Object *obj)
+     ReimsGraphicsPCIState *s = REIMS_GRAPHICS_PCI(obj);
+     ReimsGraphicsEvent *event;
+ 
+-    /* The teardown keeps event_bh for callbacks past it: it goes with s. */
++    /* The teardown keeps both BHs for callbacks past it: they go with s. */
+     if (s->event_bh) {
+         qemu_bh_delete(s->event_bh);
+     }
++    if (s->frame_bh) {
++        qemu_bh_delete(s->frame_bh);
++    }
+     while ((event = QSIMPLEQ_FIRST(&s->events)) != NULL) {
+         QSIMPLEQ_REMOVE_HEAD(&s->events, next);
+         reims_graphics_event_free(event);
