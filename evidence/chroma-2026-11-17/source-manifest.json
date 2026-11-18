@@ -1,0 +1,39 @@
+{
+  "sourceCommitMetal2Vulkan": "053e789a0e962a09a1c382e68adfb8f2d5fefeba",
+  "sourceCommitREIMS": "8f8e14af003cc17eaeb5b82e768550b9e001b993",
+  "controlledABQemuSha256": "9a698093fc0cc2c9d9ce5297a294158931bc282c585d226fe1194d392958672e",
+  "screenshots": {
+    "before": {
+      "originalCapture": "stockawake-after-screen-00.ppm",
+      "originalSha256": "b86c62f62f67fd647c7103979daaf626743bd4ee2c066543b024fb011f7efbb6",
+      "file": "before.jpg",
+      "sha256": "2cbcc4166b815fbced69716ddf9076544624caffeb272fed2e0c9138fce16219",
+      "note": "Separate video instant/boot, QEMU capture resized only."
+    },
+    "after": {
+      "originalCapture": "fixedawake-after-screen-07.ppm",
+      "originalSha256": "43faee39b3ded9cef083775d43ab22eedbc3f818e0ea6a60ccb7becee1ed3b1e",
+      "file": "after.jpg",
+      "sha256": "2c2849ecec3b11251e430df73dae096228da654db350c869f3f1472c8eb5122f",
+      "note": "Separate video instant/boot, QEMU capture resized only."
+    },
+    "comparison": {
+      "file": "before-after.jpg",
+      "sha256": "7da5323995456f99594780ab3714308a406b36a6111b89816ef82ba1a5380caa"
+    }
+  },
+  "patch": {
+    "file": "../../patches/metal2vulkan-exported-rg16-chroma-053e789a.patch",
+    "sha256": "3fc609b0ab3da0be2cf4c5f2a31cfd1ab970f0b9a4d8a828cc50bba927feb3ba",
+    "appliesToCleanSource": true,
+    "appliedFilesMatchTestedSource": true
+  },
+  "nativeProbe": {
+    "file": "native-guest-metal-chroma-probe.m",
+    "sha256": "a97059206d42cf05f204be7517609f7e2251df667f6d8774835b3db421c7e030"
+  },
+  "numericResults": {
+    "file": "numeric-results.json",
+    "sha256": "3a3f9a3d01883854cb34c71023054ced24859b45a275b3402453902ed80cf4f1"
+  }
+}

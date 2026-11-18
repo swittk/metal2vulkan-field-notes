@@ -12,6 +12,10 @@ The [actual 1080p animated macOS forest screensaver A/B](benchmarks/2026-11-16-s
 
 The [latest REIMS + Metal2Vulkan 053e789a A/B evidence](evidence/spotlight-2026-11-17/README.md) now includes a **source-applicable diagnostic fix**, a native Metal test with repeated OFF/ON results, and both the **historical visual regression screenshot** and **new latest-development OFF/ON Spotlight screenshots**. The native Clear/self-read discrepancy persists, but the current GUI sequence **does not reproduce visible ghosting in either mode**. This is not a confirmation of a present-day visible Spotlight bug or a ready-to-merge fix. Existing issue: [Metal2Vulkan #17](https://github.com/steelbrain/metal2vulkan/issues/17). No new upstream comments or PRs were made.
 
+## Exported 10-bit IOSurface chroma corruption (17 November 2026)
+
+The [green-block corruption report, actual QEMU before/after screenshots, native Metal 12-frame A/B, numeric results and current-development patch](evidence/chroma-2026-11-17/README.md) demonstrate incorrect shader reads of an exported nonzero-offset RG16Unorm chroma plane. The same-binary diagnostic A/B found 312–656 incorrect U/V sample positions per frame before alias refusal and none afterward; the newer patched development also passed. This is separate from Spotlight Clear/self-read.
+
 ## Desktop capture cadence follow-up (18 November 2026)
 
 The [fresh motion recordings, source fixes, and timing data](evidence/capture-cadence-2026-11-18/README.md) identify a 30 ms QEMU D-Bus capture limit and accumulated copy-time delay in the local Sunshine adapter. Combined changes deliver **59.996 received fps** at the unchanged requested 1080p60 settings. A/B/A controls, a timestamp-preserving before/after motion clip, latency tradeoffs, and the limits of the local receiver test are included. The larger reported periodic twitch is not claimed resolved, and no new upstream communication was made.
