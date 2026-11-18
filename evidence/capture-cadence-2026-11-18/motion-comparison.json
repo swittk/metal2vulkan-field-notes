@@ -1,0 +1,32 @@
+{
+  "durationSeconds": 6.6,
+  "displayFps": 60,
+  "method": "Decoded real HEVC units, trimmed to comparable forward motion, cropped, scaled, then displayed with zero-order hold using each recorded presentation_us timestamp. No optical interpolation or speed adjustment. Different source clips are aligned at near-matching x positions moving right.",
+  "sourceCrop": [
+    400,
+    300,
+    1800,
+    950
+  ],
+  "sources": [
+    {
+      "run": "native-stream-cadence-aba1-20261118",
+      "title": "Before: 30 ms / original pacing",
+      "firstOrdinal": 1209,
+      "lastOrdinal": 1433,
+      "firstMarkerX": 656,
+      "receivedFps": 33.328921304478435,
+      "encodedSourceSha256": "157a0beaa8df392c3749ce7262fd89950a2591e824fc21a3558b0c0790650c94"
+    },
+    {
+      "run": "native-stream-cadence-fixed1-20261118",
+      "title": "After: 16 ms / corrected pacing",
+      "firstOrdinal": 1478,
+      "lastOrdinal": 1880,
+      "firstMarkerX": 652,
+      "receivedFps": 59.99610042912468,
+      "encodedSourceSha256": "05ae9c05d003add06b2bb05282a5e2ef0bb4e50103003286aeb259ad9a14816a"
+    }
+  ],
+  "videoSha256": "c9e85af5c7a1f9cb50aaae26b0ea7816fc807ded60cbb12ce6978a389b4b314f"
+}

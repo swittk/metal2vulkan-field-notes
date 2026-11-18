@@ -1,0 +1,62 @@
+{
+  "upstream": {
+    "reims": {
+      "url": "https://github.com/steelbrain/reims-vgpu.git",
+      "branch": "development",
+      "commit": "8f8e14af003cc17eaeb5b82e768550b9e001b993"
+    },
+    "metal2vulkan": {
+      "url": "https://github.com/steelbrain/metal2vulkan.git",
+      "branch": "development",
+      "commit": "053e789a0e962a09a1c382e68adfb8f2d5fefeba"
+    },
+    "checkedUtc": "2026-11-18T03:39:39.628616+00:00"
+  },
+  "qemuVendorCommit": "f56d36ff50346f90a6dbf27e2570eeb98bb2387c",
+  "qemuCandidateSha256": "98157ddcb3ab181787f0bd685adb047930dfb169c195c92426c030b52f3351ee",
+  "rustArchiveSha256": "7c7cacfb9a86ada8727159697a7d2b9eb07db4ea2a45da1ac0e7110700dc3dda",
+  "sunshineBuild": {
+    "builtUtc": "2026-11-18T03:37:28.507020+00:00",
+    "baselineSha256": "a284e57aaa4466e0202af8e2d5073a6eda826bc7a8e2466b76956cad3a62b32a",
+    "candidateSha256": "4dab547e1bfa0998f9e886f54be6f6690a31ef7f3fcf0f42bba5747c8afd65ec",
+    "qemudbusOriginalSha256": "7660c999fab7617b8f5a4a76b658d60b154a36a8c97656f85364aec5c4d22764",
+    "qemudbusCandidateSha256": "20c4b2b905a40b50f23df8bd8a1697d51266698d748c48169585a8074f3b24b8",
+    "regressions": "passed: fixed and variable copy cost, exact deadline, missed-slot and timeout recovery",
+    "scope": "Rebuilt only qemudbusgrab object; existing project objects and static project libraries retained. Dynamic link libraries recovered from baseline runtime, CUDA 12.8.1 SDK matches original build. ldd -r checked in exact runtime image."
+  },
+  "sunshineSourceCommit": "96cf5eebd2df0a7b0042c081f6e9af32589135e8",
+  "runtime": {
+    "activatedUtc": "2026-11-18T03:44:33.677183+00:00",
+    "scope": "Experimental development VM and its stream sidecar only",
+    "sunshineSha256": "4dab547e1bfa0998f9e886f54be6f6690a31ef7f3fcf0f42bba5747c8afd65ec",
+    "qemuSha256": "98157ddcb3ab181787f0bd685adb047930dfb169c195c92426c030b52f3351ee",
+    "interval": {
+      "beforeMs": 30,
+      "afterMs": 16,
+      "monotonic": 1438988.797829706,
+      "epoch": 1794973470.292155
+    },
+    "originalConfigSha256": "0b0ec8497324e5ccc92cf8703bebc050690acfb360d3a287ccbe472345dd2c66",
+    "serverReady": true,
+    "serverFree": true,
+    "selfReadClearDiagnostic": false,
+    "bootHelperUpdated": true
+  },
+  "baselineQualification": "Development-based test VM with existing local compatibility and Metal2Vulkan patches, including no-clone optimization and self-read diagnostic default OFF. Both cadence A/B/A runs use this exact same QEMU process; they are not claimed to be pristine upstream binaries.",
+  "encodedSourceFiles": {
+    "original-pacing": {
+      "name": "native-stream-cadence-aba1-20261118/received.bin",
+      "sha256": "157a0beaa8df392c3749ce7262fd89950a2591e824fc21a3558b0c0790650c94",
+      "bytes": 42407498
+    },
+    "corrected-pacing": {
+      "name": "native-stream-cadence-fixed1-20261118/received.bin",
+      "sha256": "05ae9c05d003add06b2bb05282a5e2ef0bb4e50103003286aeb259ad9a14816a",
+      "bytes": 45212950
+    }
+  },
+  "patches": {
+    "EXPERIMENTAL-qemu-dbus-refresh-interval-20261118.patch": "a8376cf1c9c23208883bd5bb1cc320da500c87f6f682c44b4e4b5330dbd4ba4c",
+    "EXPERIMENTAL-sunshine-absolute-capture-deadline-20261118.patch": "ce08c4aa1284573755f21e7af526020207343b628aef75795cf6a3298ad837b4"
+  }
+}

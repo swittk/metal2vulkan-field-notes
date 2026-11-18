@@ -1,0 +1,158 @@
+diff --git a/ui/dbus-console.c b/ui/dbus-console.c
+index 947c3b3a54..be0416f725 100644
+--- a/ui/dbus-console.c
++++ b/ui/dbus-console.c
+@@ -623,6 +623,21 @@ dbus_ui_info_apply(DBusDisplayConsole *ddc,
+     return DBUS_METHOD_INVOCATION_HANDLED;
+ }
+ 
++uint64_t dbus_display_console_get_refresh_interval(DBusDisplayConsole *ddc)
++{
++    return ddc->display->refresh_interval;
++}
++
++void dbus_display_console_set_refresh(DBusDisplayConsole *ddc, uint64_t interval)
++{
++    unsigned int i;
++
++    for (i = 0; i < ddc->listeners->len; i++) {
++        dbus_display_listener_set_refresh(g_ptr_array_index(ddc->listeners, i),
++                                           interval);
++    }
++}
++
+ int dbus_display_console_get_index(DBusDisplayConsole *ddc)
+ {
+     return qemu_console_get_index(ddc->dcl.con);
+diff --git a/ui/dbus-listener.c b/ui/dbus-listener.c
+index 26ed84d700..6f79048179 100644
+--- a/ui/dbus-listener.c
++++ b/ui/dbus-listener.c
+@@ -1313,7 +1313,15 @@ dbus_display_listener_new(const char *bus_name,
+         ops = &dbus_gl_dcl_ops;
+     }
+ #endif
++    ddl->dcl.update_interval =
++        dbus_display_console_get_refresh_interval(console);
+     qemu_console_register_listener(con, &ddl->dcl, ops);
+ 
+     return ddl;
+ }
++
++void dbus_display_listener_set_refresh(DBusDisplayListener *ddl,
++                                       uint64_t interval)
++{
++    qemu_console_listener_set_refresh(&ddl->dcl, interval);
++}
+diff --git a/ui/dbus.c b/ui/dbus.c
+index f473a66889..22360317a3 100644
+--- a/ui/dbus.c
++++ b/ui/dbus.c
+@@ -38,6 +38,8 @@
+ #include "qemu/audio.h"
+ #include "audio/audio_int.h" /* FIXME: use QOM dynamic cast instead of drv->name */
+ #include "qapi/error.h"
++#include "qapi/visitor.h"
++#include "qapi/qapi-builtin-type-infos.h"
+ #include "qapi/qapi-type-infos-char.h"
+ #include "qapi/qapi-type-infos-ui.h"
+ #include "trace.h"
+@@ -125,6 +127,7 @@ dbus_display_init(Object *o)
+         dd->glctx.gls = qemu_gl_init_shader();
+     }
+ #endif
++    dd->refresh_interval = GUI_REFRESH_INTERVAL_DEFAULT;
+     dd->iface = qemu_dbus_display1_vm_skeleton_new();
+     dd->consoles = g_ptr_array_new_with_free_func(g_object_unref);
+ 
+@@ -501,12 +504,57 @@ set_gl_mode(Object *o, int val, Error **errp)
+     dd->gl_mode = val;
+ }
+ 
++/* The generic GUI default is 30 ms, which limits a software D-Bus stream
++ * to about 33 frames/s even when its consumer requests 60 frames/s. Expose the
++ * polling cadence independently of the guest display mode. The default stays
++ * unchanged; a streaming launcher can select a shorter interval through QMP
++ * without rebuilding, changing resolution, or changing the guest's vblank.
++ *
++ * QMP property access and listener registration run in the main loop. Updating
++ * the existing listeners here also makes changes effective during a stream,
++ * while new listeners inherit the same interval when they register.
++ */
++static void get_dbus_refresh_interval(Object *o, Visitor *v, const char *name,
++                                     void *opaque, Error **errp)
++{
++    uint64_t value = DBUS_DISPLAY(o)->refresh_interval;
++
++    visit_type_uint64(v, name, &value, errp);
++}
++
++static void set_dbus_refresh_interval(Object *o, Visitor *v, const char *name,
++                                     void *opaque, Error **errp)
++{
++    DBusDisplay *dd = DBUS_DISPLAY(o);
++    uint64_t value;
++    unsigned int i;
++
++    if (!visit_type_uint64(v, name, &value, errp)) {
++        return;
++    }
++    if (value < 1 || value > 1000) {
++        error_setg(errp, "refresh-interval must be between 1 and 1000 ms");
++        return;
++    }
++
++    dd->refresh_interval = value;
++    for (i = 0; i < dd->consoles->len; i++) {
++        dbus_display_console_set_refresh(g_ptr_array_index(dd->consoles, i),
++                                          value);
++    }
++}
++
+ static void
+ dbus_display_class_init(ObjectClass *oc, const void *data)
+ {
+     UserCreatableClass *ucc = USER_CREATABLE_CLASS(oc);
+ 
+     ucc->complete = dbus_display_complete;
++    object_class_property_add(oc, "refresh-interval", "uint64", &uint64_type_info,
++                              get_dbus_refresh_interval,
++                              set_dbus_refresh_interval, NULL, NULL);
++    object_class_property_set_description(oc, "refresh-interval",
++        "Software display polling interval in milliseconds (default 30)");
+     object_class_property_add_bool(oc, "p2p", get_dbus_p2p, set_dbus_p2p);
+     object_class_property_add_str(oc, "addr", get_dbus_addr, set_dbus_addr);
+     object_class_property_add_str(oc, "audiodev", get_audiodev, set_audiodev);
+diff --git a/ui/dbus.h b/ui/dbus.h
+index d2cc176648..4476cc4b87 100644
+--- a/ui/dbus.h
++++ b/ui/dbus.h
+@@ -44,6 +44,7 @@ struct DBusDisplay {
+ 
+     DisplayGLMode gl_mode;
+     bool p2p;
++    uint64_t refresh_interval;
+     char *dbus_addr;
+     char *audiodev;
+     DisplayGLCtx glctx;
+@@ -90,6 +91,10 @@ dbus_display_console_get_index(DBusDisplayConsole *ddc);
+ QemuConsole *
+ dbus_display_console_get_qemu_console(DBusDisplayConsole *ddc);
+ 
++/* Software console polling interval, in milliseconds. */
++uint64_t dbus_display_console_get_refresh_interval(DBusDisplayConsole *ddc);
++void dbus_display_console_set_refresh(DBusDisplayConsole *ddc, uint64_t interval);
++
+ extern const DisplayChangeListenerOps dbus_console_dcl_ops;
+ 
+ #define DBUS_DISPLAY_TYPE_LISTENER dbus_display_listener_get_type()
+@@ -110,6 +115,9 @@ dbus_display_listener_get_console(DBusDisplayListener *ddl);
+ const char *
+ dbus_display_listener_get_bus_name(DBusDisplayListener *ddl);
+ 
++void dbus_display_listener_set_refresh(DBusDisplayListener *ddl,
++                                       uint64_t interval);
++
+ extern const DisplayChangeListenerOps dbus_gl_dcl_ops;
+ extern const DisplayChangeListenerOps dbus_dcl_ops;
+ 

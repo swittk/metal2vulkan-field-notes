@@ -1,0 +1,216 @@
+{
+  "markerDetector": "7..18px unique magenta stripe; rejects24px decorative bars; all active positions required valid",
+  "decodedFrames": 3481,
+  "encodedUnits": 3481,
+  "decodeExit": 0,
+  "decodeMessages": "",
+  "activeWindowMonotonic": [
+    1437916.260971458,
+    1437989.192239526
+  ],
+  "activeSeconds": 72.93126806803048,
+  "activeFrames": 2561,
+  "configuredFps": 60,
+  "receivedFps": 35.11366106650062,
+  "receiveGapMs": {
+    "count": 2560,
+    "p50": 28.7868,
+    "p99": 33.9253,
+    "max": 37.1455,
+    "over60": 0,
+    "over100": 0
+  },
+  "capturePresentationGapMs": {
+    "count": 2560,
+    "p50": 30.133,
+    "p99": 33.034,
+    "max": 35.922,
+    "over60": 0,
+    "over100": 0
+  },
+  "hostProcessingLatencyMs": {
+    "count": 2560,
+    "p50": 14.6,
+    "p99": 30.2,
+    "max": 38.9,
+    "over60": 0,
+    "over100": 0
+  },
+  "positionHoldMs": {
+    "count": 2271,
+    "p50": 29.594,
+    "p99": 61.0423,
+    "max": 108.7358,
+    "over60": 69,
+    "over100": 1
+  },
+  "longestHolds": [
+    {
+      "x": 854,
+      "start": 1437956.972551081,
+      "ms": 108.735752
+    },
+    {
+      "x": 854,
+      "start": 1437926.169397725,
+      "ms": 91.334401
+    },
+    {
+      "x": 854,
+      "start": 1437939.370426959,
+      "ms": 90.003729
+    },
+    {
+      "x": 524,
+      "start": 1437963.698510736,
+      "ms": 82.660974
+    },
+    {
+      "x": 580,
+      "start": 1437941.138480552,
+      "ms": 80.13059
+    },
+    {
+      "x": 854,
+      "start": 1437952.582975404,
+      "ms": 79.506437
+    },
+    {
+      "x": 512,
+      "start": 1437950.380157821,
+      "ms": 79.041947
+    },
+    {
+      "x": 770,
+      "start": 1437988.335668865,
+      "ms": 63.05531
+    },
+    {
+      "x": 648,
+      "start": 1437924.877659577,
+      "ms": 63.029671
+    },
+    {
+      "x": 556,
+      "start": 1437976.48248754,
+      "ms": 63.022006
+    },
+    {
+      "x": 754,
+      "start": 1437979.634863297,
+      "ms": 62.664874
+    },
+    {
+      "x": 830,
+      "start": 1437926.019167018,
+      "ms": 62.507924
+    }
+  ],
+  "unexpectedDirectionReversals": [],
+  "crossScanlineMismatches": [],
+  "missingMarkersInActiveWindow": [],
+  "nonconsecutiveFrameNumbers": 0,
+  "stages": {
+    "refresh": {
+      "count": 4376,
+      "hz": 60.0,
+      "gapMs": {
+        "count": 4375,
+        "p50": 16.667,
+        "p99": 16.775,
+        "max": 17.921,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "request": {
+      "count": 3308,
+      "hz": 45.36,
+      "gapMs": {
+        "count": 3307,
+        "p50": 16.096,
+        "p99": 30.144,
+        "max": 32.926,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "read": {
+      "count": 3307,
+      "hz": 45.346,
+      "gapMs": {
+        "count": 3306,
+        "p50": 16.111,
+        "p99": 30.17,
+        "max": 32.886,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "done": {
+      "count": 3307,
+      "hz": 45.346,
+      "gapMs": {
+        "count": 3306,
+        "p50": 16.301,
+        "p99": 31.64,
+        "max": 36.34,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "console": {
+      "count": 3307,
+      "hz": 45.346,
+      "gapMs": {
+        "count": 3306,
+        "p50": 16.376,
+        "p99": 31.641,
+        "max": 36.26,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "updatemap": {
+      "count": 3307,
+      "hz": 45.346,
+      "gapMs": {
+        "count": 3306,
+        "p50": 16.377,
+        "p99": 31.637,
+        "max": 36.261,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "pin": {
+      "count": 2995,
+      "hz": 41.07,
+      "gapMs": {
+        "count": 2994,
+        "p50": 18.258,
+        "p99": 36.698,
+        "max": 51.395,
+        "over60": 0,
+        "over100": 0
+      }
+    },
+    "latch": {
+      "count": 2995,
+      "hz": 41.07,
+      "gapMs": {
+        "count": 2994,
+        "p50": 19.191,
+        "p99": 39.604,
+        "max": 51.588,
+        "over60": 0,
+        "over100": 0
+      }
+    }
+  },
+  "remainingProbes": [],
+  "limitations": [
+    "Local paired receiver records real encoded frames. It does not measure the user device/network/physical display.",
+    "Sunshine image and capture settings match original; temporary authentication identity differs."
+  ]
+}

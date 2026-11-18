@@ -12,6 +12,10 @@ The [actual 1080p animated macOS forest screensaver A/B](benchmarks/2026-11-16-s
 
 The [latest REIMS + Metal2Vulkan 053e789a A/B evidence](evidence/spotlight-2026-11-17/README.md) now includes a **source-applicable diagnostic fix**, a native Metal test with repeated OFF/ON results, and both the **historical visual regression screenshot** and **new latest-development OFF/ON Spotlight screenshots**. The native Clear/self-read discrepancy persists, but the current GUI sequence **does not reproduce visible ghosting in either mode**. This is not a confirmation of a present-day visible Spotlight bug or a ready-to-merge fix. Existing issue: [Metal2Vulkan #17](https://github.com/steelbrain/metal2vulkan/issues/17). No new upstream comments or PRs were made.
 
+## Desktop capture cadence follow-up (18 November 2026)
+
+The [fresh motion recordings, source fixes, and timing data](evidence/capture-cadence-2026-11-18/README.md) identify a 30 ms QEMU D-Bus capture limit and accumulated copy-time delay in the local Sunshine adapter. Combined changes deliver **59.996 received fps** at the unchanged requested 1080p60 settings. A/B/A controls, a timestamp-preserving before/after motion clip, latency tradeoffs, and the limits of the local receiver test are included. The larger reported periodic twitch is not claimed resolved, and no new upstream communication was made.
+
 ## Published source and tests
 
 - [Private-owned IOSurface backing classification](patches/private-owned-iosurface-backing.patch): a small shape-based change checked against its pinned upstream source file. See [scope and risks](archive/private-backed-surfaces.md). The larger tested integration spans REIMS and Metal2Vulkan; no standalone upstream build of this patch is claimed.
